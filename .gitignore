@@ -1,4 +1,5 @@
-**/.gitattributes/
+.gitattributes
 **/.idea/
+**/.git/
 DEM_manip.py
 cat_pro.py 

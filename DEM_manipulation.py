@@ -95,7 +95,7 @@ arcpy.gp.Plus_sa(vecEucAlloGeo, bufTimesGeo, smoothModGeo)
 arcpy.gp.Minus_sa(smoothGeoInt, sharp_drop, sharpModGeo)
 
 # Mosaic
-arcpy.Mosaic_management("%Workspace%\\smoothModGeo;%Workspace%\\sharpModGeo", bufferElevGeo,
+arcpy.Mosaic_management("smoothModGeo;sharpModGeo", bufferElevGeo,
                         "LAST", "FIRST", "", "", "NONE")
 
 # Con #3
