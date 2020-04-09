@@ -1,110 +1,131 @@
 import arcpy
+arcpy.CheckOutExtension("Spatial")
+from arcpy.sa import *
 
 # Input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace
 input_features = arcpy.GetParameterAsText(1)  # Culverts, ditches, rivers, etc. Polyline.
-DEM = arcpy.GetParameterAsText(2)  # Digital Elevation Model. Raster.
-maximum_distance = arcpy.GetParameterAsText(3)  # Buffer around an input_feature. Length in cells. Integer.
-smooth_drop = arcpy.GetParameterAsText(4)  # Smooth slope around an input_feature. Integer.
-sharp_drop = arcpy.GetParameterAsText(5)  # sharp drop just below an input_feature. Integer.
+dem = arcpy.GetParameterAsText(2)  # Digital Elevation Model. Raster.
+maximum_distance = int(arcpy.GetParameterAsText(3))  # Buffer around an input_feature. Length in cells. Integer.
+smooth_drop = int(arcpy.GetParameterAsText(4))  # Smooth slope around an input_feature. Integer.
+sharp_drop = int(arcpy.GetParameterAsText(5))  # sharp drop just below an input_feature. Integer.
 
 # Output data
-output = arcpy.GetParameterAsText(6)  # raster
+fillSinks = arcpy.GetParameterAsText(6)  # raster
 
 # Local variables
-agreeStrGeo = "%Workspace%\\agreeStrGeo"
-agreeStrDEM = "%Workspace%\\agreeStrDEM"
-smoothGeo = "%Workspace%\\smoothGeo"
-smoothGeoInt = "%Workspace%\\smoothGeoInt"
-Output_direction_raster = ""
-Output_back_direction_raster = ""
-vecEucDistGeo = "%Workspace%\\vecEucDistGeo"
-nullBuffGeo = "%Workspace%\\nullBuffGeo"
-bufferElevGeo = "%Workspace%\\bufferElevGeo"
-bufferelevint = "%Workspace%\\bufferelevint"
-Output_direction_raster__2_ = ""
-Output_back_direction_raster__2_ = ""
-vecEucAlloGeo = "%Workspace%\\vecEucAlloGeo"
-bufEucAlloGeo = "%Workspace%\\bufEucAlloGeo"
-bufMinVecAllo = "%Workspace%\\bufMinVecAllo"
-bufEucDistGeo = "%Workspace%\\bufEucDistGeo"
-bufPlVecDist = "%Workspace%\\bufPlVecDist"
-bufDivideGeo = "%Workspace%\\bufDivideGeo"
-bufTimesGeo = "%Workspace%\\bufTimesGeo"
-smoothModGeo = "%Workspace%\\smoothModGeo"
-sharpModGeo = "%Workspace%\\sharpModGeo"
-agreeDEM = "%Workspace%\\agreeDEM"
-# Area_of_Interest = "in_memory\\{316D84AE-713C-4C1F-99C9-76E2CF862E14}"  # to trzeba przemyslec
+agreeStrGeo = workspace + r"/agreeStrGeo"
+vecEucDistGeo = workspace + r"/vecEucDistGeo"
+bufferElevGeo = workspace + r"/bufferElevGeo"
+vecEucAlloGeo = workspace + r"/vecEucAlloGeo"
+bufEucAlloGeo = workspace + r"/bufEucAlloGeo"
+bufEucDistGeo = workspace + r"/bufEucDistGeo"
+smoothModGeo = workspace + r"/smoothModGeo"
+sharpModGeo = workspace + r"/sharpModGeo"
+agreeDEM = workspace + r"/agreeDEM"
 
 # Env settings
 arcpy.env.workspace = workspace
 arcpy.env.scratchWorkspace = workspace
 arcpy.env.overwriteOutput = True
-arcpy.env.snapRaster = DEM
-arcpy.env.cellSize = DEM
+arcpy.env.snapRaster = dem
+arcpy.env.cellSize = dem
 arcpy.env.nodata = "NONE"
 
 
 # Processing
+# DEM extent
+left = arcpy.GetRasterProperties_management(dem, "LEFT")
+bottom = arcpy.GetRasterProperties_management(dem, "BOTTOM")
+right = arcpy.GetRasterProperties_management(dem, "RIGHT")
+top = arcpy.GetRasterProperties_management(dem, "TOP")
+
 # Polyline to raster
-arcpy.PolylineToRaster_conversion(input_features, "OBJECTID", agreeStrGeo, "MAXIMUM_LENGTH", "NONE", DEM)
+arcpy.PolylineToRaster_conversion(input_features, "OBJECTID", agreeStrGeo, "MAXIMUM_LENGTH", "NONE", dem)
+arcpy.AddMessage('Polyline to raster. Done.')
 
 # Con
-arcpy.gp.Con_sa(agreeStrGeo, DEM, agreeStrDEM, "", "")
+agreeStrDEM = Con(agreeStrGeo, dem, "", "")
+arcpy.AddMessage('AgreeStrDem. Done.')
 
 # Minus
-arcpy.gp.Minus_sa(agreeStrDEM, smooth_drop, smoothGeo)
+smoothGeo = Minus(agreeStrDEM, smooth_drop)
+arcpy.AddMessage('SmoothGeo. Done.')
 
 # Int
-arcpy.gp.Int_sa(smoothGeo, smoothGeoInt)
+smoothGeoInt = Int(smoothGeo)
+arcpy.AddMessage('SmoothGeoInt. Done.')
+
+# New extent
+arcpy.env.extent = arcpy.Extent(left, bottom, right, top)
+arcpy.AddMessage('New extent. Done.')
 
 # Euclidean Allocation
-arcpy.gp.EucAllocation_sa(smoothGeoInt, vecEucAlloGeo, maximum_distance, "", DEM, "VALUE",
-                          vecEucDistGeo, Output_direction_raster, "PLANAR", "",
-                          Output_back_direction_raster)
+arcpy.gp.EucAllocation_sa(smoothGeoInt, vecEucAlloGeo, maximum_distance, "", dem, "VALUE",
+                          vecEucDistGeo, "", "PLANAR", "", "")
+arcpy.AddMessage('VecEucAlloGeo and vecEucDistGeo. Done.')
 
 # Is Null
-arcpy.gp.IsNull_sa(vecEucDistGeo, nullBuffGeo)
+nullBuffGeo = IsNull(vecEucDistGeo)
+arcpy.AddMessage('NullBuffGeo. Done.')
 
 # Con #2
-arcpy.gp.Con_sa(nullBuffGeo, DEM, bufferElevGeo, "", "")
+# bufferElevGeo = Con(nullBuffGeo, dem, "", "")  # does not work. Wrong number of bands in ArcMap
+arcpy.gp.Con_sa(nullBuffGeo, dem, bufferElevGeo, "", "")
+arcpy.AddMessage('BufferElevGeo. Done.')
 
 # Int #2
-arcpy.gp.Int_sa(bufferElevGeo, bufferelevint)
+bufferelevint = Int(bufferElevGeo)
+arcpy.AddMessage('BufferElevInt. Done.')
 
 # Euclidean Allocation #2
-arcpy.gp.EucAllocation_sa(bufferelevint, bufEucAlloGeo, "", "", DEM, "VALUE", bufEucDistGeo,
-                          Output_direction_raster__2_, "PLANAR", "", Output_back_direction_raster__2_)
+arcpy.gp.EucAllocation_sa(bufferelevint, bufEucAlloGeo, "", "", dem, "VALUE", bufEucDistGeo,
+                          "", "PLANAR", "", "")
+arcpy.AddMessage('Euclidean allocation. Done.')
 
 # Minus #2
-arcpy.gp.Minus_sa(bufEucAlloGeo, vecEucAlloGeo, bufMinVecAllo)
+bufMinVecAllo = Minus(bufEucAlloGeo, vecEucAlloGeo)
+arcpy.AddMessage('BufMinVecAllo. Done.')
 
 # Plus
-arcpy.gp.Plus_sa(bufEucDistGeo, vecEucDistGeo, bufPlVecDist)
+bufPlVecDist = Plus(bufEucDistGeo, vecEucDistGeo)
+arcpy.AddMessage('BufPlVecDist. Done.')
 
 # Divide
-arcpy.gp.Divide_sa(bufMinVecAllo, bufPlVecDist, bufDivideGeo)
+bufDivideGeo = Divide(bufMinVecAllo, bufPlVecDist)
+arcpy.AddMessage('BufDivideGeo. Done.')
 
 # Times
-arcpy.gp.Times_sa(bufDivideGeo, vecEucDistGeo, bufTimesGeo)
+bufTimesGeo = Times(bufDivideGeo, vecEucDistGeo)
+arcpy.AddMessage('BufTimesGeo. Done.')
 
 # Plus #2
 arcpy.gp.Plus_sa(vecEucAlloGeo, bufTimesGeo, smoothModGeo)
+arcpy.AddMessage('SmoothModGeo. Done.')
 
 # Minus #3
 arcpy.gp.Minus_sa(smoothGeoInt, sharp_drop, sharpModGeo)
+arcpy.AddMessage('SharpModGeo. Done.')
 
 # Mosaic
 arcpy.Mosaic_management("smoothModGeo;sharpModGeo", bufferElevGeo,
                         "LAST", "FIRST", "", "", "NONE")
 
 # Con #3
-arcpy.gp.Con_sa(DEM, bufferElevGeo, agreeDEM, "", "")
-
-# Calculate Statistics
-# Nie wiem czy jest potrzebne
-# arcpy.CalculateStatistics_management(agreeDEM, "1", "1", "", "OVERWRITE", Area_of_Interest)
-# arcpy.CalculateStatistics_management(agreeDEM, "1", "1", "", "OVERWRITE")
+arcpy.gp.Con_sa(dem, bufferElevGeo, agreeDEM, "", "")
+arcpy.AddMessage('AgreeDEM. Done.')
 
 # Fill
-arcpy.gp.Fill_sa(agreeDEM, output, "")
+out_fillSinks = Fill(agreeDEM)
+out_fillSinks.save(fillSinks)
+
+# del temo rasters
+arcpy.Delete_management(agreeStrGeo)
+arcpy.Delete_management(vecEucDistGeo)
+arcpy.Delete_management(bufferElevGeo)
+arcpy.Delete_management(vecEucAlloGeo)
+arcpy.Delete_management(bufEucAlloGeo)
+arcpy.Delete_management(bufEucDistGeo)
+arcpy.Delete_management(smoothModGeo)
+arcpy.Delete_management(sharpModGeo)
+arcpy.Delete_management(agreeDEM)
