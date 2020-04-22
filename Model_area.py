@@ -32,7 +32,7 @@ left = arcpy.GetRasterProperties_management(dem, "LEFT")
 bottom = arcpy.GetRasterProperties_management(dem, "BOTTOM")
 right = arcpy.GetRasterProperties_management(dem, "RIGHT")
 top = arcpy.GetRasterProperties_management(dem, "TOP")
-extent = str(left) + " " + str(bottom) + " " + str(right) + " " + str(top)
+extent = str(left) + " " + str(bottom) + " " + str(right) + " " + str(top)  # does not look nice
 
 # Add field
 arcpy.AddField_management(chosen_catchments, field_name, "SHORT")
@@ -56,8 +56,15 @@ arcpy.AddMessage("Buffer has been created.")
 
 # Rasterize
 arcpy.FeatureToRaster_conversion(catchment_buffer, field_name, rasterized_buffer, cell_size)
-arcpy.AddMessage("Raster has been built. Build? Eh...")
+arcpy.AddMessage("Buffer has been rasterized.")
 
 # Mosaic to new raster
 arcpy.MosaicToNewRaster_management("rasterized_buffer; clipped_dem", workspace, "ModelArea", "", "16_BIT_UNSIGNED",
                                    cell_size, 1, "FIRST", "FIRST")
+arcpy.AddMessage("Raster has been built.")
+
+ModelArea = workspace + r"/ModelArea"
+
+# Raster to ASCII
+arcpy.RasterToASCII_conversion(ModelArea, model_area)
+arcpy.AddMessage("Raster has been exported to ASCII.")
