@@ -4,16 +4,18 @@ from arcpy.sa import *
 
 # Input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace
-input_features = arcpy.GetParameterAsText(1)  # Culverts, ditches, rivers, etc. Polyline.
-dem = arcpy.GetParameterAsText(2)  # Digital Elevation Model. Raster.
-maximum_distance = int(arcpy.GetParameterAsText(3))  # Buffer around an input_feature. Length in cells. Integer.
-smooth_drop = int(arcpy.GetParameterAsText(4))  # Smooth slope around an input_feature. Integer.
-sharp_drop = int(arcpy.GetParameterAsText(5))  # sharp drop just below an input_feature. Integer.
+river_network = arcpy.GetParameterAsText(1)  # Culverts, ditches, rivers, etc. Polyline.
+endorheic_water_bodies = arcpy.GetParameterAsText(2)  # lakes which are not connected with a river network. Polygon.
+dem = arcpy.GetParameterAsText(3)  # Digital Elevation Model. Raster.
+maximum_distance = int(arcpy.GetParameterAsText(4))  # Buffer around an river_network. Length in cells. Integer.
+smooth_drop = int(arcpy.GetParameterAsText(5))  # Smooth slope around an river_network. Integer.
+sharp_drop = int(arcpy.GetParameterAsText(6))  # sharp drop just below an river_network. Integer.
 
 # Output data
-fillSinks = arcpy.GetParameterAsText(6)  # raster
+fillSinks = arcpy.GetParameterAsText(7)  # output raster which will be saved in workspace specified before
 
 # Local variables
+lakes = workspace + r"/lakes"
 agreeStrGeo = workspace + r"/agreeStrGeo"
 vecEucDistGeo = workspace + r"/vecEucDistGeo"
 bufferElevGeo = workspace + r"/bufferElevGeo"
@@ -23,6 +25,7 @@ bufEucDistGeo = workspace + r"/bufEucDistGeo"
 smoothModGeo = workspace + r"/smoothModGeo"
 sharpModGeo = workspace + r"/sharpModGeo"
 agreeDEM = workspace + r"/agreeDEM"
+field_name = "IsZero"
 
 # Env settings
 arcpy.env.workspace = workspace
@@ -32,8 +35,31 @@ arcpy.env.snapRaster = dem
 arcpy.env.cellSize = dem
 arcpy.env.nodata = "NONE"
 
-
 # Processing
+# Endorheic basins
+if endorheic_water_bodies != "#":
+    # New field
+    arcpy.AddField_management(endorheic_water_bodies, field_name, "SHORT", "", "", "", "IsZero", "NULLABLE",
+                              "NON_REQUIRED", "")
+    arcpy.AddMessage("New field has been created")
+
+    # Assigning values to new filed
+    arcpy.CalculateField_management(endorheic_water_bodies, field_name, 0, "PYTHON_9.3")
+    arcpy.AddMessage("Values have been assigned.")
+
+    # Rasterization
+    arcpy.PolygonToRaster_conversion(endorheic_water_bodies, field_name, lakes, "CELL_CENTER", "", dem)
+
+    # Mosaic to new raster
+    arcpy.MosaicToNewRaster_management("lakes; dem", workspace, "dem_lowered", "", "16_BIT_UNSIGNED", 2, 1, "FIRST",
+                                       "FIRST")
+
+    # Set null
+    outSetNull = SetNull("dem_lowered", "dem_lowered", "Value = 0")
+    outSetNull.save("dem_lakes")
+
+    dem = workspace + r"\dem_lakes"
+
 # DEM extent
 left = arcpy.GetRasterProperties_management(dem, "LEFT")
 bottom = arcpy.GetRasterProperties_management(dem, "BOTTOM")
@@ -41,8 +67,8 @@ right = arcpy.GetRasterProperties_management(dem, "RIGHT")
 top = arcpy.GetRasterProperties_management(dem, "TOP")
 
 # Polyline to raster
-arcpy.PolylineToRaster_conversion(input_features, "OBJECTID", agreeStrGeo, "MAXIMUM_LENGTH", "NONE", dem)
-arcpy.AddMessage('Polyline to raster. Done.')
+arcpy.PolylineToRaster_conversion(river_network, "OBJECTID", agreeStrGeo, "MAXIMUM_LENGTH", "NONE", dem)
+arcpy.AddMessage('Polylines have been rasterized')
 
 # Con
 agreeStrDEM = Con(agreeStrGeo, dem, "", "")
@@ -118,8 +144,15 @@ arcpy.AddMessage('AgreeDEM. Done.')
 # Fill
 out_fillSinks = Fill(agreeDEM)
 out_fillSinks.save(fillSinks)
+arcpy.AddMessage('New raster has been created.')
 
-# del temo rasters
+# del temporary files
+arcpy.AddMessage('Removing temporary files')
+if endorheic_water_bodies != "#":
+    arcpy.Delete_management("lakes")
+    arcpy.Delete_management("dem_lowered")
+    arcpy.Delete_management("dem_lakes")
+
 arcpy.Delete_management(agreeStrGeo)
 arcpy.Delete_management(vecEucDistGeo)
 arcpy.Delete_management(bufferElevGeo)
@@ -129,3 +162,5 @@ arcpy.Delete_management(bufEucDistGeo)
 arcpy.Delete_management(smoothModGeo)
 arcpy.Delete_management(sharpModGeo)
 arcpy.Delete_management(agreeDEM)
+
+arcpy.AddMessage('Temporary files have been removed. Now you can start the catchment processing')
