@@ -25,7 +25,7 @@ bufEucDistGeo = workspace + r"/bufEucDistGeo"
 smoothModGeo = workspace + r"/smoothModGeo"
 sharpModGeo = workspace + r"/sharpModGeo"
 agreeDEM = workspace + r"/agreeDEM"
-field_name = "IsZero"
+field_name = "LakeElev"
 
 # Env settings
 arcpy.env.workspace = workspace
@@ -36,27 +36,39 @@ arcpy.env.cellSize = dem
 arcpy.env.nodata = "NONE"
 
 # Processing
+# DEM cell size
+cell_size_x_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEX")
+cell_size_y_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEY")
+cell_size_x_direction = float(cell_size_x_direction.getOutput(0))
+cell_size_y_direction = float(cell_size_y_direction.getOutput(0))
+cell_size = (cell_size_x_direction + cell_size_y_direction) / 2
+if cell_size_x_direction != cell_size_y_direction:
+    arcpy.AddMessage('Cell size in the x-direction is different from cell size in the y-direction!')
+
 # Endorheic basins
 if endorheic_water_bodies != "#":
     # New field
-    arcpy.AddField_management(endorheic_water_bodies, field_name, "SHORT", "", "", "", "IsZero", "NULLABLE",
+    arcpy.AddField_management(endorheic_water_bodies, field_name, "SHORT", "", "", "", "LakeElev", "NULLABLE",
                               "NON_REQUIRED", "")
     arcpy.AddMessage("New field has been created")
 
     # Assigning values to new filed
-    arcpy.CalculateField_management(endorheic_water_bodies, field_name, 0, "PYTHON_9.3")
+    arcpy.CalculateField_management(endorheic_water_bodies, field_name, 9999, "PYTHON_9.3")
     arcpy.AddMessage("Values have been assigned.")
 
     # Rasterization
     arcpy.PolygonToRaster_conversion(endorheic_water_bodies, field_name, lakes, "CELL_CENTER", "", dem)
+    arcpy.AddMessage("Polygons have been rasterized.")
 
     # Mosaic to new raster
-    arcpy.MosaicToNewRaster_management("lakes; dem", workspace, "dem_lowered", "", "16_BIT_UNSIGNED", 2, 1, "FIRST",
-                                       "FIRST")
+    arcpy.MosaicToNewRaster_management("lakes; dem", workspace, "dem_manip", "", "16_BIT_UNSIGNED", cell_size, 1,
+                                       "FIRST", "FIRST")
+    arcpy.AddMessage('New raster has been created')
 
     # Set null
-    outSetNull = SetNull("dem_lowered", "dem_lowered", "Value = 0")
+    outSetNull = SetNull("dem_manip", "dem_manip", "Value = 9999")
     outSetNull.save("dem_lakes")
+    arcpy.AddMessage('Null values have been assigned')
 
     dem = workspace + r"\dem_lakes"
 
@@ -150,7 +162,7 @@ arcpy.AddMessage('New raster has been created.')
 arcpy.AddMessage('Removing temporary files')
 if endorheic_water_bodies != "#":
     arcpy.Delete_management("lakes")
-    arcpy.Delete_management("dem_lowered")
+    arcpy.Delete_management("dem_manip")
     arcpy.Delete_management("dem_lakes")
 
 arcpy.Delete_management(agreeStrGeo)

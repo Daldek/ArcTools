@@ -7,7 +7,7 @@ workspace = arcpy.GetParameterAsText(0)
 dem = arcpy.GetParameterAsText(1)
 catchment_area = arcpy.GetParameterAsText(2)
 if catchment_area == "#":
-    catchment_area = 100000
+    catchment_area = 1
 
 # output file
 catchment = arcpy.GetParameterAsText(3)
@@ -23,6 +23,21 @@ arcpy.env.overwriteOutput = True
 arcpy.env.snapRaster = dem
 arcpy.env.cellSize = dem
 arcpy.env.nodata = "NONE"
+
+# DEM cell size
+cell_size_x_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEX")
+cell_size_y_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEY")
+cell_size_x_direction = float(cell_size_x_direction.getOutput(0))
+cell_size_y_direction = float(cell_size_y_direction.getOutput(0))
+arcpy.AddMessage(type(cell_size_x_direction))
+arcpy.AddMessage(type(cell_size_y_direction))
+cell_size = (cell_size_x_direction + cell_size_y_direction) / 2
+if cell_size_x_direction != cell_size_y_direction:
+    arcpy.AddMessage('Cell size in the x-direction is different from cell size in the y-direction!')
+
+catchment_area = float(catchment_area)
+catchment_area = (catchment_area * 1000000) / (cell_size_x_direction * cell_size_y_direction)
+catchment_area = int(catchment_area)
 
 # Script arguments
 Expression = "VALUE > " + str(catchment_area)
