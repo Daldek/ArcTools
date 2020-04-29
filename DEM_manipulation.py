@@ -5,7 +5,8 @@ from arcpy.sa import *
 # Input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace
 river_network = arcpy.GetParameterAsText(1)  # Culverts, ditches, rivers, etc. Polyline.
-endorheic_water_bodies = arcpy.GetParameterAsText(2)  # lakes which are not connected with a river network. Polygon.
+endorheic_water_bodies = arcpy.GetParameterAsText(2)
+# Water bodies that are not connected to other surface waters. Polygon.
 dem = arcpy.GetParameterAsText(3)  # Digital Elevation Model. Raster.
 maximum_distance = int(arcpy.GetParameterAsText(4))  # Buffer around an river_network. Length in cells. Integer.
 smooth_drop = int(arcpy.GetParameterAsText(5))  # Smooth slope around an river_network. Integer.
@@ -36,6 +37,11 @@ arcpy.env.cellSize = dem
 arcpy.env.nodata = "NONE"
 
 # Processing
+# Channel depth
+if sharp_drop < smooth_drop:
+    sharp_drop = smooth_drop
+    arcpy.AddMessage('Sharp drop must be greater or equal smooth drop! Script will continue to run with equal values.')
+
 # DEM cell size
 cell_size_x_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEX")
 cell_size_y_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEY")
@@ -148,6 +154,7 @@ arcpy.AddMessage('SharpModGeo. Done.')
 # Mosaic
 arcpy.Mosaic_management("smoothModGeo;sharpModGeo", bufferElevGeo,
                         "LAST", "FIRST", "", "", "NONE")
+arcpy.AddMessage('Mosaic. Done.')
 
 # Con #3
 arcpy.gp.Con_sa(dem, bufferElevGeo, agreeDEM, "", "")
