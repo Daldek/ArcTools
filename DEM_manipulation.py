@@ -67,7 +67,7 @@ if endorheic_water_bodies != "#":
     arcpy.AddMessage("Polygons have been rasterized.")
 
     # Mosaic to new raster
-    arcpy.MosaicToNewRaster_management("lakes; dem", workspace, "dem_manip", "", "16_BIT_UNSIGNED", cell_size, 1,
+    arcpy.MosaicToNewRaster_management("lakes; dem", workspace, "dem_manip", "", "32_BIT_FLOAT", cell_size, 1,
                                        "FIRST", "FIRST")
     arcpy.AddMessage('New raster has been created')
 
