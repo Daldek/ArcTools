@@ -57,11 +57,11 @@ arcpy.AddMessage('Conditional raster has been built.')
 
 # Stream link
 strLn = StreamLink(stream, flowDir)
-arcpy.AddMessage('Steam links has been found.')
+arcpy.AddMessage('Steam links have been found.')
 
 # Stream to feature
 StreamToFeature(strLn, flowDir, streams, "NO_SIMPLIFY")
-arcpy.AddMessage('Steams has been converted to features.')
+arcpy.AddMessage('Streams have been converted to features.')
 
 # Watershed
 cat = Watershed(flowDir, strLn, "VALUE")

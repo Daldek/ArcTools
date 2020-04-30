@@ -6,10 +6,9 @@ from arcpy.sa import *
 workspace = arcpy.GetParameterAsText(0)
 dem = arcpy.GetParameterAsText(1)
 chosen_catchments = arcpy.GetParameterAsText(2)
-cell_size = arcpy.GetParameterAsText(3)  # temporary! Will be removed later
 
 # output file
-model_area = arcpy.GetParameterAsText(4)
+model_area = arcpy.GetParameterAsText(3)
 
 # Local variables
 catchment = workspace + r"/catchment"
@@ -34,6 +33,15 @@ right = arcpy.GetRasterProperties_management(dem, "RIGHT")
 top = arcpy.GetRasterProperties_management(dem, "TOP")
 extent = str(left) + " " + str(bottom) + " " + str(right) + " " + str(top)  # does not look nice
 
+# DEM cell size
+cell_size_x_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEX")
+cell_size_y_direction = arcpy.GetRasterProperties_management(dem, "CELLSIZEY")
+cell_size_x_direction = float(cell_size_x_direction.getOutput(0))
+cell_size_y_direction = float(cell_size_y_direction.getOutput(0))
+cell_size = (cell_size_x_direction + cell_size_y_direction) / 2
+if cell_size_x_direction != cell_size_y_direction:
+    arcpy.AddMessage("Cell size in the x-direction is different from cell size in the y-direction!")
+
 # Add field
 arcpy.AddField_management(chosen_catchments, field_name, "SHORT")
 arcpy.AddMessage("New field has been created.")
@@ -44,14 +52,14 @@ arcpy.AddMessage("Values have been assigned.")
 
 # Dissolve
 arcpy.Dissolve_management(chosen_catchments, catchment, field_name, "", "MULTI_PART")
-arcpy.AddMessage('New cathchment has been created.')
+arcpy.AddMessage("New cathchment has been created.")
 
 # Clip
 arcpy.Clip_management(dem, extent, clipped_dem, catchment, "999", "ClippingGeometry", "NO_MAINTAIN_EXTENT")
 
 # Buffer
 buffer_dist = int(cell_size) * 2
-arcpy.Buffer_analysis(catchment, catchment_buffer, buffer_dist, 'OUTSIDE_ONLY')
+arcpy.Buffer_analysis(catchment, catchment_buffer, buffer_dist, "OUTSIDE_ONLY")
 arcpy.AddMessage("Buffer has been created.")
 
 # Rasterize
@@ -59,7 +67,7 @@ arcpy.FeatureToRaster_conversion(catchment_buffer, field_name, rasterized_buffer
 arcpy.AddMessage("Buffer has been rasterized.")
 
 # Mosaic to new raster
-arcpy.MosaicToNewRaster_management("rasterized_buffer; clipped_dem", workspace, "ModelArea", "", "16_BIT_UNSIGNED",
+arcpy.MosaicToNewRaster_management("rasterized_buffer; clipped_dem", workspace, "ModelArea", "", "32_BIT_FLOAT",
                                    cell_size, 1, "FIRST", "FIRST")
 arcpy.AddMessage("Raster has been built.")
 
