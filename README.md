@@ -50,7 +50,7 @@ $ git pull https://github.com/Daldek/ArcTools.git
 ```python
 parameter_name = arcpy.GetParameterAsText(0)
 ```
-##FAQ
+## FAQ
 - **What data is needed to use this tool?**
     - Digital Elevation Model and polylines with river network (at least line must
     be a culvert centerline or channel axis under a bridge that you want to open up)
@@ -79,6 +79,6 @@ parameter_name = arcpy.GetParameterAsText(0)
     not filled. "AgreeDEM" is an input file to the third tool "Model_area". It might sounds
     complicated, but I will fix this issue!
 
-##Documentation
+## Documentation
 
 Soon ;)
