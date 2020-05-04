@@ -180,6 +180,5 @@ arcpy.Delete_management(bufEucAlloGeo)
 arcpy.Delete_management(bufEucDistGeo)
 arcpy.Delete_management(smoothModGeo)
 arcpy.Delete_management(sharpModGeo)
-arcpy.Delete_management(agreeDEM)
 
 arcpy.AddMessage('Temporary files have been removed. Now you can start the catchment processing')
