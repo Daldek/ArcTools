@@ -4,7 +4,7 @@ from arcpy.sa import *
 
 workspace = arcpy.GetParameterAsText(0)
 inRaster = arcpy.GetParameterAsText(1)
-outRatser = arcpy.GetParameterAsText(2)
+outRaster = arcpy.GetParameterAsText(2)
 
 # Env settings
 arcpy.env.workspace = workspace
@@ -16,4 +16,4 @@ arcpy.env.nodata = "NONE"
 
 outCon = Con(IsNull(inRaster), FocalStatistics(inRaster, NbrRectangle(6, 6, "CELL"), "MEAN"), inRaster)
 
-outCon.save(outRatser)
+outCon.save(outRaster)
