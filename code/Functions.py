@@ -87,6 +87,9 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
                                        mosaic_colormap_mode="FIRST")
     arcpy.AddMessage('New raster has been created.')
 
+    layers_to_remove = [ditch_buffer, ditch_raster, ditch_fill]
+    for layer in layers_to_remove:
+        arcpy.Delete_management(layer)
     output_raster = workspace + r"/filled_channels"
     arcpy.AddMessage('Sinks have been filled.')
     return output_raster
@@ -96,6 +99,8 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     # Variables
     new_field_name = "LakeElev"
     lakes = workspace + r"/lakes"
+    dem_manip = workspace + r"/dem_manip"
+    dem_lakes = workspace + r"\dem_lakes"
 
     if cell_size == '#':
         cell_size = raster_cell_size(input_raster)
@@ -140,10 +145,12 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     out_set_null = SetNull(in_conditional_raster=workspace + r"/dem_manip",
                            in_false_raster_or_constant=workspace + r"/dem_manip",
                            where_clause="Value = 9999")
-    new_input_raster = workspace + r"\dem_lakes"
-    out_set_null.save(new_input_raster)
+    out_set_null.save(dem_lakes)
     arcpy.AddMessage('Null values have been assigned. New raster is ready.')
-    return new_input_raster
+    layers_to_remove = [lakes, dem_manip]
+    for layer in layers_to_remove:
+        arcpy.Delete_management(layer)
+    return dem_lakes
 
 
 def raster_manipulation(workspace,
@@ -173,16 +180,6 @@ def raster_manipulation(workspace,
 
     cell_size = raster_cell_size(input_raster)
     # ditch_buffer_size = channel_width + (2 * cell_size)
-
-    # Endorheic basins
-    if endorheic_water_bodies != "#":
-        input_raster = raster_endorheic_modification(workspace,
-                                                     input_raster,
-                                                     cell_size,
-                                                     endorheic_water_bodies)
-        layers_to_remove.append(workspace + r"/lakes")
-        layers_to_remove.append(workspace + r"/dem_mani")
-        layers_to_remove.append(workspace + r"/dem_lakes")
 
     ras = Raster(input_raster) * 1000
 
@@ -323,6 +320,15 @@ def raster_manipulation(workspace,
     layers_to_remove.append(workspace + r"/ditch_raster")
     layers_to_remove.append(workspace + r"/ditch_fill")
 
+    # Endorheic basins
+    if endorheic_water_bodies != "#":
+        arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
+        agree_dem = raster_endorheic_modification(workspace,
+                                                  agree_dem,
+                                                  cell_size,
+                                                  endorheic_water_bodies)
+        layers_to_remove.append(workspace + r"/dem_lakes")
+
     # Fill sinks
     out_fill = Fill(in_surface_raster=agree_dem)
     out_fill.save(workspace + r"/AgreeDEM")
@@ -332,6 +338,7 @@ def raster_manipulation(workspace,
 
     arcpy.AddMessage('Temporary files have been removed.\n'
                      'Now you can start the catchment processing.')
+    return 1
 
 
 def catchment_delineation(workspace, input_raster, catchment_area, output):
@@ -466,7 +473,7 @@ def catchment_delineation(workspace, input_raster, catchment_area, output):
     return output
 
 
-def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster, output):
+def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster, inclination, output_folder):
     # Variables
     # Elevation model
     catchment = workspace + r"/catchment"
@@ -478,13 +485,18 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     dem_buildings = workspace + r"/dem_buildings"
     field_name = "new_elev"
 
-    # Land use raster
-    land_use_clip = workspace + r"/land_use_clip"
+    # # Land use raster
+    # land_use_clip = workspace + r"/land_use_clip"
 
-    # # Roughness rasters
-    # slope_grid = workspace + r"/slope_grid"
-    # steep_slopes_grid = workspace + r"/steep_slopes_grid"
-    # steep_slopes_grid_clip = workspace + r"/steep_slopes_grid_clip"
+    # Roughness rasters
+    slope_grid = workspace + r"/slope_grid"
+    steep_slopes_grid = workspace + r"/steep_slopes_grid"
+    steep_slopes_grid_clip = workspace + r"/steep_slopes_grid_clip"
+
+    layers_to_remove = [catchment_buffer, rasterized_buffer,
+                        rasterized_buildings, rasterized_buildings_calc,
+                        clipped_dem, dem_buildings,
+                        slope_grid]
 
     # Catchment
     # Add field
@@ -577,7 +589,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     output_mosaic_list = [clipped_dem, rasterized_buffer]
     arcpy.MosaicToNewRaster_management(input_rasters=output_mosaic_list,
                                        output_location=workspace,
-                                       raster_dataset_name_with_extension=output,
+                                       raster_dataset_name_with_extension="model_domain_grid",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
                                        number_of_bands=1,
@@ -613,15 +625,15 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     ROUGHNESS GRID (LAND USE + STEEP SLOPES)
     '''
     # Slope
-    # arcpy.Slope_3d(dem_buildings, slope_grid, "DEGREE", 1.0)
-    # arcpy.AddMessage("Slopes have been calculated.")
-    #
-    # # Reclassify
-    # additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
-    #                                                                    [inclination, 180, 998]]))
-    # additional_roughness.save(steep_slopes_grid)
-    # arcpy.AddMessage("Raster has been reclassified.")
-    #
+    arcpy.Slope_3d(dem_buildings, slope_grid, "DEGREE", 1.0)
+    arcpy.AddMessage("Slopes have been calculated.")
+
+    # Reclassify
+    additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
+                                                                       [inclination, 180, 998]]))
+    additional_roughness.save(steep_slopes_grid)
+    arcpy.AddMessage("Raster has been reclassified.")
+
     # # Clip
     # arcpy.Clip_management(steep_slopes_grid, extent, steep_slopes_grid_clip, catchment, "#", "ClippingGeometry",
     #                       "NO_MAINTAIN_EXTENT")
@@ -635,11 +647,11 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     '''
     DATA EXPORT
     '''
-    # # Model domain to ASCII
-    # output_file = output_folder + str("/model_domain.asc")
-    # arcpy.RasterToASCII_conversion("model_domain_grid", output_file)
-    # arcpy.AddMessage("Model domain raster has been exported to ASCII.")
-    #
+    # Model domain to ASCII
+    output_file = output_folder + str("/model_domain.asc")
+    arcpy.RasterToASCII_conversion("model_domain_grid", output_file)
+    arcpy.AddMessage("Model domain raster has been exported to ASCII.")
+
     # # Land use to ASCII
     # output_file = output_folder + str("/land_use.asc")
     # arcpy.RasterToASCII_conversion("landuse_grid", output_file)
@@ -649,6 +661,10 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     # output_file = output_folder + str("/roughness.asc")
     # arcpy.RasterToASCII_conversion("roughness_grid", output_file)
     # arcpy.AddMessage("Roughness raster has been exported to ASCII.")
+
+    for layer in layers_to_remove:
+        arcpy.Delete_management(layer)
+    return 1
 
 
 def gap_interpolation(radius, input_raster):
