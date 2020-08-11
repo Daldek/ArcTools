@@ -111,7 +111,7 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
                               field_type="SHORT",
                               field_alias=new_field_name,
                               field_is_nullable="NULLABLE",
-                              field_is_required="NON_REQUIRED", )
+                              field_is_required="NON_REQUIRED")
     arcpy.AddMessage("New field has been created.")
 
     # Assigning values to the new filed
@@ -485,8 +485,9 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     dem_buildings = workspace + r"/dem_buildings"
     field_name = "new_elev"
 
-    # # Land use raster
-    # land_use_clip = workspace + r"/land_use_clip"
+    # Land use raster
+    land_use_clip = workspace + r"/land_use_clip"
+    landuse_grid = workspace + r"/landuse_grid"
 
     # Roughness rasters
     slope_grid = workspace + r"/slope_grid"
@@ -600,26 +601,26 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     '''
     LAND USE GRID
     '''
-    # # Clip
-    # arcpy.Clip_management(input_raster=landuse_raster,
-    #                       rectangle=extent,
-    #                       out_raster=land_use_clip,
-    #                       in_template_dataset=catchment,
-    #                       clipping_geometry="ClippingGeometry",
-    #                       maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    # arcpy.AddMessage("Land use raster has been clipped.")
-    #
-    # # Mosaic to new raster
-    # land_use_mosaic_list = [land_use_clip, rasterized_buffer]
-    # arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
-    #                                    output_location=workspace,
-    #                                    raster_dataset_name_with_extension="landuse_grid",
-    #                                    pixel_type="16_BIT_UNSIGNED",
-    #                                    cellsize=cell_size,
-    #                                    number_of_bands=1,
-    #                                    mosaic_method="FIRST",
-    #                                    mosaic_colormap_mode="FIRST")
-    # arcpy.AddMessage("Lands use raster has been built.")
+    # Clip
+    arcpy.Clip_management(in_raster=landuse_raster,
+                          rectangle=extent,
+                          out_raster=land_use_clip,
+                          in_template_dataset=catchment,
+                          clipping_geometry="ClippingGeometry",
+                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
+    arcpy.AddMessage("Land use raster has been clipped.")
+
+    # Mosaic to new raster
+    land_use_mosaic_list = [land_use_clip, rasterized_buffer]
+    arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
+                                       output_location=workspace,
+                                       raster_dataset_name_with_extension="landuse_grid",
+                                       pixel_type="16_BIT_UNSIGNED",
+                                       cellsize=cell_size,
+                                       number_of_bands=1,
+                                       mosaic_method="FIRST",
+                                       mosaic_colormap_mode="FIRST")
+    arcpy.AddMessage("Lands use raster has been built.")
 
     '''
     ROUGHNESS GRID (LAND USE + STEEP SLOPES)
@@ -634,15 +635,26 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     additional_roughness.save(steep_slopes_grid)
     arcpy.AddMessage("Raster has been reclassified.")
 
-    # # Clip
-    # arcpy.Clip_management(steep_slopes_grid, extent, steep_slopes_grid_clip, catchment, "#", "ClippingGeometry",
-    #                       "NO_MAINTAIN_EXTENT")
-    # arcpy.AddMessage("Land use raster has been clipped.")
-    #
-    # # Mosaic to new raster
-    # arcpy.MosaicToNewRaster_management("steep_slopes_grid_clip; landuse_grid", workspace, "roughness_grid", "",
-    #                                    "16_BIT_UNSIGNED", cell_size, 1, "FIRST", "FIRST")
-    # arcpy.AddMessage("Roughness raster has been built.")
+    # Clip
+    arcpy.Clip_management(in_raster=steep_slopes_grid,
+                          rectangle=extent,
+                          out_raster=steep_slopes_grid_clip,
+                          in_template_dataset=catchment,
+                          clipping_geometry="ClippingGeometry",
+                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
+    arcpy.AddMessage("Land use raster has been clipped.")
+
+    # Mosaic to new raster
+    roughness_mosaic_list = [steep_slopes_grid_clip, landuse_grid]
+    arcpy.MosaicToNewRaster_management(input_rasters=roughness_mosaic_list,
+                                       output_location=workspace,
+                                       raster_dataset_name_with_extension="roughness_grid",
+                                       pixel_type="16_BIT_UNSIGNED",
+                                       cellsize=cell_size,
+                                       number_of_bands=1,
+                                       mosaic_method="FIRST",
+                                       mosaic_colormap_mode="FIRST")
+    arcpy.AddMessage("Roughness raster has been built.")
 
     '''
     DATA EXPORT
@@ -652,15 +664,15 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.RasterToASCII_conversion("model_domain_grid", output_file)
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
 
-    # # Land use to ASCII
-    # output_file = output_folder + str("/land_use.asc")
-    # arcpy.RasterToASCII_conversion("landuse_grid", output_file)
-    # arcpy.AddMessage("Land use raster has been exported to ASCII.")
-    #
-    # # Land use to ASCII
-    # output_file = output_folder + str("/roughness.asc")
-    # arcpy.RasterToASCII_conversion("roughness_grid", output_file)
-    # arcpy.AddMessage("Roughness raster has been exported to ASCII.")
+    # Land use to ASCII
+    output_file = output_folder + str("/land_use.asc")
+    arcpy.RasterToASCII_conversion("landuse_grid", output_file)
+    arcpy.AddMessage("Land use raster has been exported to ASCII.")
+
+    # Roughness to ASCII
+    output_file = output_folder + str("/roughness.asc")
+    arcpy.RasterToASCII_conversion("roughness_grid", output_file)
+    arcpy.AddMessage("Roughness raster has been exported to ASCII.")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
