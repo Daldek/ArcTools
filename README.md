@@ -16,7 +16,7 @@ and creating an ASCII GRID file.
 - ArcMap 10.7.1
 - Git (not required, but will make things easier)
 
-**Install**
+**Installation**
 
 > From GitHub to your machine:
 - You can simply download this repository and put anywhere you like, but make sure
@@ -62,7 +62,7 @@ $ git pull https://github.com/Daldek/ArcTools.git
 - **Catchment delineation**
     - Workspace
     - Raster ("AgreeDEM" from "Raster Manipulation" script)
-    - Catchment Area (default are = 0,25 sq.km)
+    - Catchment Area (default = 0,25 sq.km)
     - Output file name
 
 - **Domain Creation**
