@@ -660,19 +660,23 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     DATA EXPORT
     '''
     # Model domain to ASCII
-    output_file = output_folder + str("/model_domain.asc")
-    arcpy.RasterToASCII_conversion("model_domain_grid", output_file)
+    model_domain_output_file = output_folder + str("/model_domain.asc")
+    arcpy.RasterToASCII_conversion("model_domain_grid", model_domain_output_file)
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
 
     # Land use to ASCII
-    output_file = output_folder + str("/land_use.asc")
-    arcpy.RasterToASCII_conversion("landuse_grid", output_file)
+    land_use_output_file = output_folder + str("/land_use.asc")
+    arcpy.RasterToASCII_conversion("landuse_grid", land_use_output_file)
     arcpy.AddMessage("Land use raster has been exported to ASCII.")
 
     # Roughness to ASCII
-    output_file = output_folder + str("/roughness.asc")
-    arcpy.RasterToASCII_conversion("roughness_grid", output_file)
+    roughness_output_file = output_folder + str("/roughness.asc")
+    arcpy.RasterToASCII_conversion("roughness_grid", roughness_output_file)
     arcpy.AddMessage("Roughness raster has been exported to ASCII.")
+
+    # ASCII validation
+    comlumns_rows_check(land_use_output_file, model_domain_output_file,
+                        roughness_output_file)
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -689,3 +693,41 @@ def gap_interpolation(radius, input_raster):
                   in_false_raster_or_constant=input_raster)
     arcpy.AddMessage('Gaps have been interpolated.')
     return out_con
+
+def comlumns_rows_check(land_use_path, model_domain_path, roughness_path):
+    land_use = open(land_use_path, "r")
+    model_domain = open(model_domain_path, "r")
+    roughness = open(roughness_path, "r")
+    model_domain_columns = model_domain.readline()
+    model_domain_rows = model_domain.readline()
+    model_domain_x = model_domain.readline()
+    model_domain_y = model_domain.readline()
+    land_use_columns = land_use.readline()
+    land_use_rows = land_use.readline()
+    land_use_x = land_use.readline()
+    land_use_y = land_use.readline()
+    roughness_columns = roughness.readline()
+    roughness_rows = roughness.readline()
+    roughness_x = roughness.readline()
+    roughness_y = roughness.readline()
+    if model_domain_columns == land_use_columns and\
+            land_use_columns == roughness_columns:
+        arcpy.AddMessage('Number of columns match')
+    else:
+        arcpy.AddMessage('Wrong number of columns')
+    if model_domain_rows == land_use_rows and\
+            land_use_rows == roughness_rows:
+        arcpy.AddMessage('Number of rows match')
+    else:
+        arcpy.AddMessage('Wrong number of rows')
+    if model_domain_x == land_use_x and\
+            land_use_x == roughness_x:
+        arcpy.AddMessage('X match')
+    else:
+        arcpy.AddMessage('Wrong X')
+    if model_domain_y == land_use_y and\
+            land_use_y == roughness_y:
+        arcpy.AddMessage('Y match')
+    else:
+        arcpy.AddMessage('Wrong Y')
+
