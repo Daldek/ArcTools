@@ -1,6 +1,3 @@
-import sys
-sys.path.append('../code/')
-
 from Functions import *
 
 workspace = arcpy.GetParameterAsText(0)

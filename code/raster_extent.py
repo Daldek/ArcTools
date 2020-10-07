@@ -1,7 +1,5 @@
-import sys
-sys.path.append('../code/')
-
-from Functions import *
+import arcpy
+from Functions import raster_extent
 
 # Input
 input_raster = arcpy.GetParameterAsText(0)

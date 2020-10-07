@@ -1,6 +1,4 @@
-import arcpy
-arcpy.CheckOutExtension("Spatial")
-from code.Functions import *
+from Functions import *
 
 # Input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace

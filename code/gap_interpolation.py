@@ -1,7 +1,5 @@
-import sys
-sys.path.append('../code/')
-
-from Functions import *
+import arcpy
+from Functions import gap_interpolation
 
 workspace = arcpy.GetParameterAsText(0)
 radius = arcpy.GetParameterAsText(1)

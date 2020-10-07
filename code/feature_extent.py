@@ -1,7 +1,5 @@
-import sys
-sys.path.append('../code/')
-
-from Functions import *
+import arcpy
+from Functions import feature_extent
 
 # Input
 feature = arcpy.GetParameterAsText(0)

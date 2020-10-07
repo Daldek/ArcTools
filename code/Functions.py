@@ -79,7 +79,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe list instead of string?
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
                                        output_location=workspace,
-                                       raster_dataset_name_with_extension="filled_channels",
+                                       raster_dataset_name_with_extension="Filled_channels",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
                                        number_of_bands=1,
@@ -90,7 +90,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     layers_to_remove = [ditch_buffer, ditch_raster, ditch_fill]
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
-    output_raster = workspace + r"/filled_channels"
+    output_raster = workspace + r"/Filled_channels"
     arcpy.AddMessage('Sinks have been filled.')
     return output_raster
 
@@ -321,7 +321,7 @@ def raster_manipulation(workspace,
     layers_to_remove.append(workspace + r"/ditch_fill")
 
     # Endorheic basins
-    if endorheic_water_bodies != "#":
+    if endorheic_water_bodies != "":
         arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
         agree_dem = raster_endorheic_modification(workspace,
                                                   agree_dem,
@@ -341,7 +341,7 @@ def raster_manipulation(workspace,
     return 1
 
 
-def catchment_delineation(workspace, input_raster, catchment_area, output):
+def catchment_delineation(workspace, input_raster, catchment_area):
     # Variables
     streams = workspace + r"/streams"
     temp_basin = workspace + r"/tempBasin"
@@ -350,7 +350,7 @@ def catchment_delineation(workspace, input_raster, catchment_area, output):
     union_basins = workspace + r"/union_basins"
     layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
     catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
-    output = workspace + r"/" + output
+    output = workspace + r"/Catchments"
     expression = "VALUE > " + str(catchment_area)
     arcpy.AddMessage('Expression "' + str(expression) + '"')
 
@@ -675,8 +675,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.AddMessage("Roughness raster has been exported to ASCII.")
 
     # ASCII validation
-    comlumns_rows_check(land_use_output_file, model_domain_output_file,
-                        roughness_output_file)
+    columns_rows_check(land_use_output_file, model_domain_output_file, roughness_output_file)
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -694,7 +693,8 @@ def gap_interpolation(radius, input_raster):
     arcpy.AddMessage('Gaps have been interpolated.')
     return out_con
 
-def comlumns_rows_check(land_use_path, model_domain_path, roughness_path):
+
+def columns_rows_check(land_use_path, model_domain_path, roughness_path):
     land_use = open(land_use_path, "r")
     model_domain = open(model_domain_path, "r")
     roughness = open(roughness_path, "r")
@@ -730,4 +730,4 @@ def comlumns_rows_check(land_use_path, model_domain_path, roughness_path):
         arcpy.AddMessage('Y match')
     else:
         arcpy.AddMessage('Wrong Y')
-
+    return 1
