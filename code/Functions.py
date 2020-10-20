@@ -208,9 +208,13 @@ def raster_manipulation(workspace,
     # New extent
     # arcpy.env.extent = arcpy.Extent(raster_extent(input_raster))
     left = arcpy.GetRasterProperties_management(ras, "LEFT")
+    left = left.replace(',', '.')
     bottom = arcpy.GetRasterProperties_management(ras, "BOTTOM")
+    bottom = bottom.replace(',', '.')
     right = arcpy.GetRasterProperties_management(ras, "RIGHT")
+    right = right.replace(',', '.')
     top = arcpy.GetRasterProperties_management(ras, "TOP")
+    top = top.replace(',', '.')
     arcpy.env.extent = arcpy.Extent(left, bottom, right, top)
     arcpy.AddMessage('New environment settings set.')
 
