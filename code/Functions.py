@@ -208,12 +208,16 @@ def raster_manipulation(workspace,
     # New extent
     # arcpy.env.extent = arcpy.Extent(raster_extent(input_raster))
     left = arcpy.GetRasterProperties_management(ras, "LEFT")
+    left = str(left)
     left = left.replace(',', '.')
     bottom = arcpy.GetRasterProperties_management(ras, "BOTTOM")
+    bottom = str(bottom)
     bottom = bottom.replace(',', '.')
     right = arcpy.GetRasterProperties_management(ras, "RIGHT")
+    right = str(right)
     right = right.replace(',', '.')
     top = arcpy.GetRasterProperties_management(ras, "TOP")
+    top = str(top)
     top = top.replace(',', '.')
     arcpy.env.extent = arcpy.Extent(left, bottom, right, top)
     arcpy.AddMessage('New environment settings set.')
@@ -734,4 +738,39 @@ def columns_rows_check(land_use_path, model_domain_path, roughness_path):
         arcpy.AddMessage('Y match')
     else:
         arcpy.AddMessage('Wrong Y')
+    return 1
+
+
+def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
+            coordinate_system, class_codes, cell_size, output_raster):
+
+    # Variables
+    output_raster_path = workspace_gdb + r"/" + str(output_raster)
+    output_las = workspace_folder + r"/LasDataset.lasd"
+    class_codes = list(class_codes.split(', '))
+
+    # Create LAS dataset
+    arcpy.CreateLasDataset_management(input=input_las_catalog,
+                                      out_las_dataset=output_las,
+                                      folder_recursion='NO_RECURSION',
+                                      spatial_reference=coordinate_system)
+    arcpy.AddMessage('LAS dataset has been created.')
+
+    # Create LAS dataset layer
+    arcpy.MakeLasDatasetLayer_management(in_las_dataset=output_las,
+                                         out_layer='LasLayer',
+                                         class_code=class_codes,
+                                         no_flag='EXCLUDE_UNFLAGGED',
+                                         synthetic='EXCLUDE_SYNTHETIC')
+    arcpy.AddMessage('LAS dataset layer has been made.')
+
+    # LAS dataset to raster
+    arcpy.LasDatasetToRaster_conversion(in_las_dataset='LasLayer',
+                                        out_raster=output_raster_path,
+                                        value_field='ELEVATION',
+                                        interpolation_type='BINNING AVERAGE LINEAR',
+                                        data_type='FLOAT',
+                                        sampling_type='CELLSIZE',
+                                        sampling_value=cell_size)
+    arcpy.AddMessage('Raster has been created.')
     return 1
