@@ -789,57 +789,71 @@ def mike_tools2arc_mask(workspace, cell_size, input_raster, threshold_value, nod
     max_depth = arcpy.GetRasterProperties_management(input_raster, "MAXIMUM")
 
     # Reclassify input raster
-    reclassified_depth_raster = Reclassify(in_raster=input_raster,
+    reclassified_input_raster = Reclassify(in_raster=input_raster,
                                            reclass_field="VALUE",
                                            remap=RemapRange([[min_depth, threshold_value, 0],
                                                              [threshold_value, max_depth, 1]]))
 
-    # Polygons to raster
-    arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
-                                     value_field="OBJECTID",
-                                     out_rasterdataset=rasterized_polygons,
-                                     cell_assignment="CELL_CENTER",
-                                     cellsize=cell_size)
-    arcpy.AddMessage("Polygons have been rasterized.")
+    # Check in polygons should be removed from raster
+    if nodata_polygons != '':
+        # Polygons to raster
+        arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
+                                         value_field="OBJECTID",
+                                         out_rasterdataset=rasterized_polygons,
+                                         cell_assignment="CELL_CENTER",
+                                         cellsize=cell_size)
+        arcpy.AddMessage("Polygons have been rasterized.")
 
-    # Properties of the new raster
-    max_id = arcpy.GetRasterProperties_management(rasterized_polygons, "MAXIMUM")
+        # Properties of the new raster
+        max_id = arcpy.GetRasterProperties_management(rasterized_polygons, "MAXIMUM")
 
-    # Reclassify rasterized polygons
-    reclassified_poly_raster = Reclassify(in_raster=rasterized_polygons,
-                                          reclass_field="VALUE",
-                                          remap=RemapRange([[0, max_id, 0]]))
-    arcpy.AddMessage("Rasterized polygons have been reclassified.")
+        # Reclassify rasterized polygons
+        reclassified_poly_raster = Reclassify(in_raster=rasterized_polygons,
+                                              reclass_field="VALUE",
+                                              remap=RemapRange([[0, max_id, 0]]))
+        arcpy.AddMessage("Rasterized polygons have been reclassified.")
 
-    # Mosaic to new raster
-    arcpy.MosaicToNewRaster_management(input_rasters=[reclassified_poly_raster, reclassified_depth_raster],
-                                       output_location=workspace,
-                                       raster_dataset_name_with_extension="depth_buildings_raster",
-                                       pixel_type="1_BIT",
-                                       cellsize=cell_size,
-                                       number_of_bands=1,
-                                       mosaic_method="FIRST",
-                                       mosaic_colormap_mode="FIRST")
-    arcpy.AddMessage('New raster has been created.')
+        # Mosaic to new raster
+        arcpy.MosaicToNewRaster_management(input_rasters=[reclassified_poly_raster, reclassified_input_raster],
+                                           output_location=workspace,
+                                           raster_dataset_name_with_extension="depth_buildings_raster",
+                                           pixel_type="1_BIT",
+                                           cellsize=cell_size,
+                                           number_of_bands=1,
+                                           mosaic_method="FIRST",
+                                           mosaic_colormap_mode="FIRST")
+        arcpy.AddMessage('New raster has been created.')
 
-    # Set null
-    out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
-                           in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
-                           where_clause="Value = 0")
-    arcpy.AddMessage("Null values have been assigned.")
+        # Set null
+        out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
+                               in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
+                               where_clause="Value = 0")
+        arcpy.AddMessage("Null values have been assigned.")
+    else:
+        # Set null
+        out_set_null = SetNull(in_conditional_raster=reclassified_input_raster,
+                               in_false_raster_or_constant=reclassified_input_raster,
+                               where_clause="Value = 0")
+        arcpy.AddMessage("Null values have been assigned.")
 
-    # Clip
-    arcpy.Clip_management(in_raster=out_set_null,
-                          rectangle=extent,
-                          out_raster=out_set_null_clipped,
-                          in_template_dataset=domain,
-                          clipping_geometry="ClippingGeometry",
-                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    arcpy.AddMessage('Raster has been clipped.')
+    # Check if the domain was predefined
+    if domain != '':
+        # Clip
+        arcpy.Clip_management(in_raster=out_set_null,
+                              rectangle=extent,
+                              out_raster=out_set_null_clipped,
+                              in_template_dataset=domain,
+                              clipping_geometry="ClippingGeometry",
+                              maintain_clipping_extent="NO_MAINTAIN_EXTENT")
+        arcpy.AddMessage('Raster has been clipped.')
 
-    # Extract by mask
-    created_mask = ExtractByMask(input_raster, out_set_null)
-    arcpy.AddMessage('Mask has been created.')
+        # Extract by mask
+        created_mask = ExtractByMask(input_raster, out_set_null_clipped)
+    else:
+        # Extract by mask
+        created_mask = ExtractByMask(input_raster, out_set_null)
+        arcpy.AddMessage('Mask has been created.')
+
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
     arcpy.AddMessage('Temporary files have been removed.')
