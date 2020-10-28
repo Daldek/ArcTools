@@ -1,5 +1,5 @@
 import arcpy
-from Functions import feature_extent
+from functions import feature_extent
 
 # Input
 feature = arcpy.GetParameterAsText(0)

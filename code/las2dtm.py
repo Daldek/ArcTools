@@ -1,4 +1,4 @@
-from Functions import *
+from functions import *
 
 workspace_gdb = arcpy.GetParameterAsText(0)
 workspace_folder = arcpy.GetParameterAsText(1)

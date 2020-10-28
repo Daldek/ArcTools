@@ -1,4 +1,4 @@
-from Functions import *
+from functions import *
 
 # Input
 input_raster = arcpy.GetParameterAsText(0)

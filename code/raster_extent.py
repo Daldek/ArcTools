@@ -1,5 +1,5 @@
 import arcpy
-from Functions import raster_extent
+from functions import raster_extent
 
 # Input
 input_raster = arcpy.GetParameterAsText(0)

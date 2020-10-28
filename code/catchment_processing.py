@@ -1,8 +1,8 @@
-from Functions import *
+from functions import *
 
 # input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace
-input_raster = arcpy.GetParameterAsText(1)  # Hydrologically correct raster. "AgreeDEM" from "DEM_manipulation.py"
+input_raster = arcpy.GetParameterAsText(1)  # Hydrologically correct raster. "AgreeDEM" from "dem_manipulation.py"
 catchment_area = arcpy.GetParameterAsText(2)  # Desired area of single catchment
 if catchment_area == "#":
     catchment_area = 0.25  # unit - square kilometers

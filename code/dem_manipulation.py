@@ -1,4 +1,4 @@
-from Functions import *
+from functions import *
 
 # Input data
 workspace = arcpy.GetParameterAsText(0)  # Output and scratch workspace

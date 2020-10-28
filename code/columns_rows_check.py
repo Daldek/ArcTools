@@ -1,5 +1,5 @@
 import arcpy
-from Functions import columns_rows_check
+from functions import columns_rows_check
 
 # Input
 input_folder = arcpy.GetParameterAsText(0)
