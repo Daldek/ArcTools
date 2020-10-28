@@ -776,12 +776,9 @@ def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
     return 1
 
 
-def mike_tools2arc_mask(workspace, cell_size, input_raster, threshold_value, nodata_polygons, domain):
+def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, nodata_polygons, domain):
     # Variables
-    rasterized_polygons = workspace + r"/rasterized_polygons"
-    depth_buildings_raster = workspace + r"/depth_buildings_raster"
-    out_set_null_clipped = workspace + r"/out_set_null_clipped"
-    layers_to_remove = [rasterized_polygons, depth_buildings_raster, out_set_null_clipped]
+    layers_to_remove = []
 
     # Input raster properties
     extent = raster_extent(input_raster)
@@ -796,6 +793,9 @@ def mike_tools2arc_mask(workspace, cell_size, input_raster, threshold_value, nod
 
     # Check in polygons should be removed from raster
     if nodata_polygons != '':
+        rasterized_polygons = workspace + r"/rasterized_polygons"
+        depth_buildings_raster = workspace + r"/depth_buildings_raster"
+        layers_to_remove.extend([rasterized_polygons, depth_buildings_raster])
         # Polygons to raster
         arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
                                          value_field="OBJECTID",
@@ -838,6 +838,8 @@ def mike_tools2arc_mask(workspace, cell_size, input_raster, threshold_value, nod
 
     # Check if the domain was predefined
     if domain != '':
+        out_set_null_clipped = workspace + r"/out_set_null_clipped"
+        layers_to_remove.append(out_set_null_clipped)
         # Clip
         arcpy.Clip_management(in_raster=out_set_null,
                               rectangle=extent,
