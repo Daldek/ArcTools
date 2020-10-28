@@ -850,12 +850,14 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
         arcpy.AddMessage('Raster has been clipped.')
 
         # Extract by mask
-        created_mask = ExtractByMask(input_raster, out_set_null_clipped)
+        # created_mask = ExtractByMask(input_raster, out_set_null_clipped)
+        created_mask = out_set_null_clipped
     else:
         # Extract by mask
-        created_mask = ExtractByMask(input_raster, out_set_null)
-        arcpy.AddMessage('Mask has been created.')
+        # created_mask = ExtractByMask(input_raster, out_set_null)
+        created_mask = out_set_null
 
+    arcpy.AddMessage('Mask has been created.')
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
     arcpy.AddMessage('Temporary files have been removed.')
