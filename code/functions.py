@@ -1,3 +1,4 @@
+import re
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
@@ -862,3 +863,21 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
         arcpy.Delete_management(layer)
     arcpy.AddMessage('Temporary files have been removed.')
     return created_mask
+
+
+def mike_tools_decoder(input_name, group_number, variable_value):
+    """
+    #0 Whole expression
+    #1 Name
+    #2 Simulation number
+    #3 Cell size
+    #4 Time step
+    #5 Item
+    #6 Mask
+    """
+    pattern = re.compile(
+        r'([a-zA-Z]+)_sim(\d+)_(\d+)m_ts(\d+)_(Surface_elevation|Current_speed|Total_water_depth)(_mask|)')
+    matches = pattern.finditer(input_name)
+    for match in matches:
+        if match.group(group_number) == variable_value:
+            return match.group(0)
