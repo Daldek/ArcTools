@@ -879,5 +879,13 @@ def mike_tools_decoder(input_name, group_number, variable_value):
         r'([a-zA-Z]+)_sim(\d+)_(\d+)m_ts(\d+)_(Surface_elevation|Current_speed|Total_water_depth)(_mask|)')
     matches = pattern.finditer(input_name)
     for match in matches:
-        if match.group(group_number) == variable_value:
+        if group_number == 5 and match.group(group_number) == variable_value:
             return match.group(0)
+        elif group_number == 5 and match.group(group_number) != variable_value:
+            break
+        elif group_number == 6 and match.group(group_number) == variable_value:
+            return match.group(0)
+        elif group_number == 6 and match.group(group_number) != variable_value:
+            break
+        else:
+            return match.group(group_number)

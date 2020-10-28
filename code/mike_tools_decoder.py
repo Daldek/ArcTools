@@ -12,6 +12,8 @@ arcpy.env.workspace = workspace
 ras_list = []
 ras_names = arcpy.ListRasters()
 for ras_name in ras_names:
-    ras_list.append(mike_tools_decoder(ras_name, group_number, variable_value))
+    decoded_name = mike_tools_decoder(ras_name, group_number, variable_value)
+    if decoded_name is not None:
+        ras_list.append(decoded_name)
 
 arcpy.AddMessage(ras_list)
