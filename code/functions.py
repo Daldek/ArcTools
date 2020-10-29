@@ -840,7 +840,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
     # Check if the domain was predefined
     if domain != '':
         out_set_null_clipped = workspace + r"/out_set_null_clipped"
-        layers_to_remove.append(out_set_null_clipped)
+        # layers_to_remove.append(out_set_null_clipped)
         # Clip
         arcpy.Clip_management(in_raster=out_set_null,
                               rectangle=extent,

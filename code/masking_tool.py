@@ -26,19 +26,15 @@ for ras_name in ras_names:
         masks_list.append(decoded_ras_name)
 
 for mask in masks_list:
-    arcpy.AddMessage(mask)
-    in_mask_path = workspace + "\\" + str(mask)
-    arcpy.env.snapRaster = in_mask_path
-    out_mask_path = workspace + "\\" + str(mask) + r"_mask"
-    out_mask = mask_below_threshold(workspace, cell_size, in_mask_path, threshold_value, nodata_polygons, domain)
-    out_mask.save(out_mask_path)
+    arcpy.AddMessage("Raster to be converted to a mask " + mask)
+    arcpy.env.snapRaster = mask
+    out_mask_name = str(mask) + r"_mask"
+    out_mask = mask_below_threshold(workspace, cell_size, mask, threshold_value, nodata_polygons, domain)
     for ras_name in ras_names:
-        if mike_tools_decoder(out_mask_path, 2, '') == mike_tools_decoder(ras_name, 2, ''):
-            ras_path = workspace + "\\" + str(ras_name)
-            masked_raster_path = str(ras_path) + r"_masked"
-            arcpy.AddMessage(out_mask_path + " will mask " + ras_path)
-            arcpy.AddMessage("Output path " + masked_raster_path)
-            masked_raster = ExtractByMask(ras_path, out_mask_path)
-            masked_raster.save(masked_raster_path)
+        if mike_tools_decoder(out_mask_name, 2, '') == mike_tools_decoder(ras_name, 2, ''):
+            masked_raster_name = str(ras_name) + r"_masked"
+            arcpy.AddMessage(out_mask_name + " will mask " + ras_name)
+            masked_raster = ExtractByMask(ras_name, out_mask)
+            masked_raster.save(masked_raster_name)
 
 arcpy.RefreshCatalog(workspace)
