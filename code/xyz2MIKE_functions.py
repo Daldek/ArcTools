@@ -47,13 +47,13 @@ def tab_to_new_line(save_path):
     save_data.write(working_data)
 
 # ----------------------------last_char-----------------------------------------
-#     input_xyz = open(save_path, "r+")
-#     working_data = input_xyz.read()
-#     working_data = working_data.replace("", "")
-#
-# # ----------------------------saving_part---------------------------------------
-#     save_data = open(save_path, "w+")
-#     save_data.write(working_data)
+    input_xyz = open(save_path, "r+")
+    working_data = input_xyz.read()
+    working_data = working_data.replace("", "")
+
+# ----------------------------saving_part---------------------------------------
+    save_data = open(save_path, "w+")
+    save_data.write(working_data)
 
 
 #--------------------------delete_empty_lines-----------------------------------
@@ -216,6 +216,6 @@ def dBase2xyz(dBase_Table, workspace):
     # arcpy.AddMessage('Success!')
 
 
-# dBase2xyz(dBase_path, save_path)
+dBase2xyz(dBase_path, save_path)
 
-change_to_TXT(dBase_path, save_path)
+# change_to_TXT(dBase_path, save_path)
