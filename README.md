@@ -76,6 +76,10 @@ $ git pull https://github.com/Daldek/ArcTools.git
     - Inclination
     - Output folder
 
+- **MIKE2xyz**
+    - Workspace -> place where user wants to save .xyz file
+    - dTable -> dbf table made basing on a sampled raster
+    
 ## FAQ
 - **What data is needed to use this tool?**
     - Digital Elevation Model and polylines with river network (at least line must
