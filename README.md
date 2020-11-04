@@ -14,6 +14,7 @@ and creating an ASCII GRID file.
 ## Install
 **Requirements**
 - ArcMap 10.7.1
+- ArcMap 10.8.1 (even better than 10.7.1)
 - Git (not required, but will make things easier)
 
 **Installation**
