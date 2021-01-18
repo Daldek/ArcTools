@@ -18,11 +18,11 @@ def raster_cell_size(input_raster):
     y_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEY")
     x_direction = float(x_direction.getOutput(0))
     y_direction = float(y_direction.getOutput(0))
-    input_raster_cell_size = (x_direction + y_direction) / 2
+    cell_size = (x_direction + y_direction) / 2
     if x_direction != y_direction:
         arcpy.AddMessage('Cell size in the x-direction is different from cell size in the y-direction!')
     arcpy.AddMessage('Cell size has been calculated.')
-    return input_raster_cell_size
+    return cell_size
 
 
 def raster_extent(input_raster):
@@ -160,7 +160,8 @@ def raster_manipulation(workspace,
                         channel_width,
                         smooth_drop,
                         sharp_drop,
-                        endorheic_water_bodies):
+                        endorheic_water_bodies,
+                        creating_agreedem):
     # Variables
     smooth_drop *= 1000
     sharp_drop *= 1000
@@ -329,18 +330,22 @@ def raster_manipulation(workspace,
     layers_to_remove.append(workspace + r"/ditch_raster")
     layers_to_remove.append(workspace + r"/ditch_fill")
 
-    # Endorheic basins
-    if endorheic_water_bodies != "":
-        arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
-        agree_dem = raster_endorheic_modification(workspace,
-                                                  agree_dem,
-                                                  cell_size,
-                                                  endorheic_water_bodies)
-        layers_to_remove.append(workspace + r"/dem_lakes")
+    if creating_agreedem is True:
+        arcpy.AddMessage("AgreeDEM will be created")
+        # Endorheic basins
+        if endorheic_water_bodies != "":
+            arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
+            agree_dem = raster_endorheic_modification(workspace,
+                                                      agree_dem,
+                                                      cell_size,
+                                                      endorheic_water_bodies)
+            layers_to_remove.append(workspace + r"/dem_lakes")
 
-    # Fill sinks
-    out_fill = Fill(in_surface_raster=agree_dem)
-    out_fill.save(workspace + r"/AgreeDEM")
+        # Fill sinks
+        out_fill = Fill(in_surface_raster=agree_dem)
+        out_fill.save(workspace + r"/AgreeDEM")
+    else:
+        layers_to_remove.append(workspace + r"/AgreeDEM")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -743,18 +748,23 @@ def columns_rows_check(land_use_path, model_domain_path, roughness_path):
 
 
 def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
-            coordinate_system, class_codes, cell_size, output_raster):
+            coordinate_system, class_codes, cell_size, output_raster_name):
 
     # Variables
-    output_raster_path = workspace_gdb + r"/" + str(output_raster)
+    output_raster_path = workspace_gdb + r"/" + str(output_raster_name)
     output_las = workspace_folder + r"/LasDataset.lasd"
     class_codes = list(class_codes.split(', '))
 
     # Create LAS dataset
-    arcpy.CreateLasDataset_management(input=input_las_catalog,
-                                      out_las_dataset=output_las,
-                                      folder_recursion='NO_RECURSION',
-                                      spatial_reference=coordinate_system)
+    if coordinate_system != '':
+        arcpy.CreateLasDataset_management(input=input_las_catalog,
+                                          out_las_dataset=output_las,
+                                          folder_recursion='NO_RECURSION',
+                                          spatial_reference=coordinate_system)
+    else:
+        arcpy.CreateLasDataset_management(input=input_las_catalog,
+                                          out_las_dataset=output_las,
+                                          folder_recursion='NO_RECURSION')
     arcpy.AddMessage('LAS dataset has been created.')
 
     # Create LAS dataset layer
@@ -785,6 +795,9 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
     extent = raster_extent(input_raster)
     min_depth = arcpy.GetRasterProperties_management(input_raster, "MINIMUM")
     max_depth = arcpy.GetRasterProperties_management(input_raster, "MAXIMUM")
+    if cell_size == '':
+        arcpy.AddMessage('Initialization of the "raster_cell_size" function.')
+        raster_cell_size(input_raster)
 
     # Reclassify input raster
     reclassified_input_raster = Reclassify(in_raster=input_raster,
@@ -829,18 +842,17 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
         out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
                                in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
                                where_clause="Value = 0")
-        arcpy.AddMessage("Null values have been assigned.")
     else:
         # Set null
         out_set_null = SetNull(in_conditional_raster=reclassified_input_raster,
                                in_false_raster_or_constant=reclassified_input_raster,
                                where_clause="Value = 0")
-        arcpy.AddMessage("Null values have been assigned.")
+    arcpy.AddMessage("Null values have been assigned.")
 
     # Check if the domain was predefined
     if domain != '':
         out_set_null_clipped = workspace + r"/out_set_null_clipped"
-        # layers_to_remove.append(out_set_null_clipped)
+        layers_to_remove.append(out_set_null_clipped)
         # Clip
         arcpy.Clip_management(in_raster=out_set_null,
                               rectangle=extent,
