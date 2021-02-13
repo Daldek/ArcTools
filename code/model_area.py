@@ -9,7 +9,7 @@ buildings = arcpy.GetParameterAsText(4)  # Polygon feature class
 landuse_raster = arcpy.GetParameterAsText(5)  # Raster
 inclination = arcpy.GetParameterAsText(6)
 # Unit: degree. For slopes greater then specified inclination, new land use class will be created
-buffer_distance = arcpy.GetParameterAsText(7)  # Meters
+buffer_distance = int(arcpy.GetParameterAsText(7))  # Meters
 output_folder = arcpy.GetParameterAsText(8)  # Where the ASCII files will be saved
 
 # Env settings
