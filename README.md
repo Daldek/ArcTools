@@ -73,8 +73,9 @@ $ git pull https://github.com/Daldek/ArcTools.git
     - Selected catchments (Select catchment from "Catchment delineation" script 
     and save as a new feature class)
     - Buildings
-    - Landuse raster
+    - Land use raster
     - Inclination
+    - buffer distance
     - Output folder
 
 - **MIKE2xyz**
