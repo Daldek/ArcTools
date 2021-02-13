@@ -1,4 +1,4 @@
-from Functions import *
+from functions import *
 
 # Input
 workspace = arcpy.GetParameterAsText(0)

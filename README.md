@@ -14,6 +14,7 @@ and creating an ASCII GRID file.
 ## Install
 **Requirements**
 - ArcMap 10.7.1
+- ArcMap 10.8.1 (even better than 10.7.1)
 - Git (not required, but will make things easier)
 
 **Installation**
@@ -72,9 +73,18 @@ $ git pull https://github.com/Daldek/ArcTools.git
     - Selected catchments (Select catchment from "Catchment delineation" script 
     and save as a new feature class)
     - Buildings
-    - Landuse raster
+    - Land use raster
     - Inclination
+    - buffer distance
     - Output folder
+
+- **MIKE2xyz**
+    - Workspace -> place where user wants to save .xyz file
+    - dTable -> dbf table made basing on a sampled raster
+
+- **Equidistant_rain**
+    - input_excel -> none equidistant rain data file
+    - output_excel
 
 ## FAQ
 - **What data is needed to use this tool?**

@@ -1,6 +1,8 @@
+import re
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
+import arcpy.cartography as CA
 arcpy.CheckOutExtension("Spatial")
 
 
@@ -17,11 +19,11 @@ def raster_cell_size(input_raster):
     y_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEY")
     x_direction = float(x_direction.getOutput(0))
     y_direction = float(y_direction.getOutput(0))
-    input_raster_cell_size = (x_direction + y_direction) / 2
+    cell_size = (x_direction + y_direction) / 2
     if x_direction != y_direction:
         arcpy.AddMessage('Cell size in the x-direction is different from cell size in the y-direction!')
     arcpy.AddMessage('Cell size has been calculated.')
-    return input_raster_cell_size
+    return cell_size
 
 
 def raster_extent(input_raster):
@@ -159,7 +161,8 @@ def raster_manipulation(workspace,
                         channel_width,
                         smooth_drop,
                         sharp_drop,
-                        endorheic_water_bodies):
+                        endorheic_water_bodies,
+                        creating_agreedem):
     # Variables
     smooth_drop *= 1000
     sharp_drop *= 1000
@@ -328,18 +331,22 @@ def raster_manipulation(workspace,
     layers_to_remove.append(workspace + r"/ditch_raster")
     layers_to_remove.append(workspace + r"/ditch_fill")
 
-    # Endorheic basins
-    if endorheic_water_bodies != "":
-        arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
-        agree_dem = raster_endorheic_modification(workspace,
-                                                  agree_dem,
-                                                  cell_size,
-                                                  endorheic_water_bodies)
-        layers_to_remove.append(workspace + r"/dem_lakes")
+    if creating_agreedem is True:
+        arcpy.AddMessage("AgreeDEM will be created")
+        # Endorheic basins
+        if endorheic_water_bodies != "":
+            arcpy.AddMessage('Initialization of the "raster_endorheic_modification" function.')
+            agree_dem = raster_endorheic_modification(workspace,
+                                                      agree_dem,
+                                                      cell_size,
+                                                      endorheic_water_bodies)
+            layers_to_remove.append(workspace + r"/dem_lakes")
 
-    # Fill sinks
-    out_fill = Fill(in_surface_raster=agree_dem)
-    out_fill.save(workspace + r"/AgreeDEM")
+        # Fill sinks
+        out_fill = Fill(in_surface_raster=agree_dem)
+        out_fill.save(workspace + r"/AgreeDEM")
+    else:
+        layers_to_remove.append(workspace + r"/AgreeDEM")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -481,17 +488,21 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     return output
 
 
-def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster, inclination, output_folder):
+def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster,
+                    inclination, buffer_distance, output_folder):
     # Variables
     # Elevation model
     catchment = workspace + r"/catchment"
     catchment_buffer = workspace + r"/catchment_buffer"
-    rasterized_buffer = workspace + r"/rasterized_buffer"
+    catchment_simple = workspace + r"/catchment_simple"
+    # catchment_wall = workspace + r"/catchment_wall"
+    # rasterized_wall = workspace + r"/rasterized_wall"
     rasterized_buildings = workspace + r"/rasterized_buildings"
     rasterized_buildings_calc = workspace + r"/rasterized_buildings_calc"
-    clipped_dem = workspace + r"/clipped_dem"
+    # clipped_dem = workspace + r"/clipped_dem"
     dem_buildings = workspace + r"/dem_buildings"
     field_name = "new_elev"
+    model_domain_grid = workspace + r"/model_domain_grid"
 
     # Land use raster
     land_use_clip = workspace + r"/land_use_clip"
@@ -502,10 +513,18 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     steep_slopes_grid = workspace + r"/steep_slopes_grid"
     steep_slopes_grid_clip = workspace + r"/steep_slopes_grid_clip"
 
-    layers_to_remove = [catchment_buffer, rasterized_buffer,
-                        rasterized_buildings, rasterized_buildings_calc,
-                        clipped_dem, dem_buildings,
-                        slope_grid]
+    layers_to_remove = [catchment,
+                        catchment_buffer,
+                        catchment_simple,
+                        rasterized_buildings,
+                        rasterized_buildings_calc,
+                        dem_buildings,
+                        model_domain_grid,
+                        land_use_clip,
+                        landuse_grid,
+                        slope_grid,
+                        steep_slopes_grid,
+                        steep_slopes_grid_clip]
 
     # Catchment
     # Add field
@@ -527,6 +546,23 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                               dissolve_field=field_name,
                               multi_part="MULTI_PART")
     arcpy.AddMessage("New catchment has been created.")
+
+    # Graphic buffer
+    arcpy.GraphicBuffer_analysis(in_features=catchment,
+                                 out_feature_class=catchment_buffer,
+                                 buffer_distance_or_field=buffer_distance,
+                                 line_caps="SQUARE",
+                                 line_joins="MITER")
+    arcpy.AddMessage("The catchment area has been extended.")
+
+    # Simplify polygon (catchment)
+    CA.SimplifyPolygon(in_features=catchment_buffer,
+                       out_feature_class=catchment_simple,
+                       algorithm="POINT_REMOVE",
+                       tolerance=(buffer_distance/2),
+                       error_option="NO_CHECK",
+                       collapsed_point_option="NO_KEEP")
+    arcpy.AddMessage("The catchment are has been simplified.")
 
     # Buildings
     # Add field
@@ -565,46 +601,58 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                                        mosaic_colormap_mode="FIRST")
     arcpy.AddMessage("New DEM has been built.")
 
+    # New extent
+    extent = feature_extent(catchment_simple)
+    arcpy.AddMessage("Catchment extent: " + str(extent))
+
+    # Env extent - for some unknown reason clipped rasters have same extent as in_dem. I would like them to be smaller
+    desc = arcpy.Describe(catchment_simple)
+    x_max = desc.extent.XMax
+    y_max = desc.extent.YMax
+    x_min = desc.extent.XMin
+    y_min = desc.extent.YMin
+    arcpy.env.extent = arcpy.Extent(x_min, y_min, x_max, y_max)
+    arcpy.AddMessage('New environment settings set.')
+
     '''
     NEW DIGITAL ELEVATION MODEL
     '''
     # Clip
-    extent = raster_extent(input_raster)
     arcpy.Clip_management(in_raster=dem_buildings,
                           rectangle=extent,
-                          out_raster=clipped_dem,
-                          in_template_dataset=catchment,
+                          out_raster=model_domain_grid,
+                          in_template_dataset=catchment_simple,
                           nodata_value="999",
                           clipping_geometry="ClippingGeometry",
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
     arcpy.AddMessage("DEM has been clipped.")
 
-    # Buffer
-    buffer_dist = int(cell_size) * 2
-    arcpy.Buffer_analysis(in_features=catchment,
-                          out_feature_class=catchment_buffer,
-                          buffer_distance_or_field=buffer_dist,
-                          line_side="OUTSIDE_ONLY")
-    arcpy.AddMessage("Buffer has been created.")
-
-    # Rasterize
-    arcpy.FeatureToRaster_conversion(in_features=catchment_buffer,
-                                     field=field_name,
-                                     out_raster=rasterized_buffer,
-                                     cell_size=cell_size)
-    arcpy.AddMessage("Buffer has been rasterized.")
-
-    # Mosaic to new raster
-    output_mosaic_list = [clipped_dem, rasterized_buffer]
-    arcpy.MosaicToNewRaster_management(input_rasters=output_mosaic_list,
-                                       output_location=workspace,
-                                       raster_dataset_name_with_extension="model_domain_grid",
-                                       pixel_type="32_BIT_FLOAT",
-                                       cellsize=cell_size,
-                                       number_of_bands=1,
-                                       mosaic_method="FIRST",
-                                       mosaic_colormap_mode="FIRST")
-    arcpy.AddMessage("Domain raster has been built.")
+    # # Buffer
+    # buffer_dist = int(cell_size) * 2
+    # arcpy.Buffer_analysis(in_features=catchment_simple,
+    #                       out_feature_class=catchment_wall,
+    #                       buffer_distance_or_field=buffer_dist,
+    #                       line_side="OUTSIDE_ONLY")
+    # arcpy.AddMessage("Buffer has been created.")
+    #
+    # # Rasterize
+    # arcpy.FeatureToRaster_conversion(in_features=catchment_wall,
+    #                                  field=field_name,
+    #                                  out_raster=rasterized_wall,
+    #                                  cell_size=cell_size)
+    # arcpy.AddMessage("Buffer has been rasterized.")
+    #
+    # # Mosaic to new raster
+    # output_mosaic_list = [clipped_dem, rasterized_wall]
+    # arcpy.MosaicToNewRaster_management(input_rasters=output_mosaic_list,
+    #                                    output_location=workspace,
+    #                                    raster_dataset_name_with_extension="model_domain_grid",
+    #                                    pixel_type="32_BIT_FLOAT",
+    #                                    cellsize=cell_size,
+    #                                    number_of_bands=1,
+    #                                    mosaic_method="FIRST",
+    #                                    mosaic_colormap_mode="FIRST")
+    # arcpy.AddMessage("Domain raster has been built.")
 
     '''
     LAND USE GRID
@@ -612,23 +660,23 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     # Clip
     arcpy.Clip_management(in_raster=landuse_raster,
                           rectangle=extent,
-                          out_raster=land_use_clip,
-                          in_template_dataset=catchment,
+                          out_raster=landuse_grid,
+                          in_template_dataset=catchment_simple,
                           clipping_geometry="ClippingGeometry",
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
     arcpy.AddMessage("Land use raster has been clipped.")
 
-    # Mosaic to new raster
-    land_use_mosaic_list = [land_use_clip, rasterized_buffer]
-    arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
-                                       output_location=workspace,
-                                       raster_dataset_name_with_extension="landuse_grid",
-                                       pixel_type="16_BIT_UNSIGNED",
-                                       cellsize=cell_size,
-                                       number_of_bands=1,
-                                       mosaic_method="FIRST",
-                                       mosaic_colormap_mode="FIRST")
-    arcpy.AddMessage("Lands use raster has been built.")
+    # # Mosaic to new raster
+    # land_use_mosaic_list = [land_use_clip, rasterized_wall]
+    # arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
+    #                                    output_location=workspace,
+    #                                    raster_dataset_name_with_extension="landuse_grid",
+    #                                    pixel_type="16_BIT_UNSIGNED",
+    #                                    cellsize=cell_size,
+    #                                    number_of_bands=1,
+    #                                    mosaic_method="FIRST",
+    #                                    mosaic_colormap_mode="FIRST")
+    # arcpy.AddMessage("Lands use raster has been built.")
 
     '''
     ROUGHNESS GRID (LAND USE + STEEP SLOPES)
@@ -647,7 +695,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.Clip_management(in_raster=steep_slopes_grid,
                           rectangle=extent,
                           out_raster=steep_slopes_grid_clip,
-                          in_template_dataset=catchment,
+                          in_template_dataset=catchment_simple,
                           clipping_geometry="ClippingGeometry",
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
     arcpy.AddMessage("Land use raster has been clipped.")
@@ -742,18 +790,23 @@ def columns_rows_check(land_use_path, model_domain_path, roughness_path):
 
 
 def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
-            coordinate_system, class_codes, cell_size, output_raster):
+            coordinate_system, class_codes, cell_size, output_raster_name):
 
     # Variables
-    output_raster_path = workspace_gdb + r"/" + str(output_raster)
+    output_raster_path = workspace_gdb + r"/" + str(output_raster_name)
     output_las = workspace_folder + r"/LasDataset.lasd"
     class_codes = list(class_codes.split(', '))
 
     # Create LAS dataset
-    arcpy.CreateLasDataset_management(input=input_las_catalog,
-                                      out_las_dataset=output_las,
-                                      folder_recursion='NO_RECURSION',
-                                      spatial_reference=coordinate_system)
+    if coordinate_system != '':
+        arcpy.CreateLasDataset_management(input=input_las_catalog,
+                                          out_las_dataset=output_las,
+                                          folder_recursion='NO_RECURSION',
+                                          spatial_reference=coordinate_system)
+    else:
+        arcpy.CreateLasDataset_management(input=input_las_catalog,
+                                          out_las_dataset=output_las,
+                                          folder_recursion='NO_RECURSION')
     arcpy.AddMessage('LAS dataset has been created.')
 
     # Create LAS dataset layer
@@ -774,3 +827,120 @@ def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
                                         sampling_value=cell_size)
     arcpy.AddMessage('Raster has been created.')
     return 1
+
+
+def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, nodata_polygons, domain):
+    # Variables
+    layers_to_remove = []
+
+    # Input raster properties
+    extent = raster_extent(input_raster)
+    min_depth = arcpy.GetRasterProperties_management(input_raster, "MINIMUM")
+    max_depth = arcpy.GetRasterProperties_management(input_raster, "MAXIMUM")
+    if cell_size == '':
+        arcpy.AddMessage('Initialization of the "raster_cell_size" function.')
+        raster_cell_size(input_raster)
+
+    # Reclassify input raster
+    reclassified_input_raster = Reclassify(in_raster=input_raster,
+                                           reclass_field="VALUE",
+                                           remap=RemapRange([[min_depth, threshold_value, 0],
+                                                             [threshold_value, max_depth, 1]]))
+
+    # Check in polygons should be removed from raster
+    if nodata_polygons != '':
+        rasterized_polygons = workspace + r"/rasterized_polygons"
+        depth_buildings_raster = workspace + r"/depth_buildings_raster"
+        layers_to_remove.extend([rasterized_polygons, depth_buildings_raster])
+        # Polygons to raster
+        arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
+                                         value_field="OBJECTID",
+                                         out_rasterdataset=rasterized_polygons,
+                                         cell_assignment="CELL_CENTER",
+                                         cellsize=cell_size)
+        arcpy.AddMessage("Polygons have been rasterized.")
+
+        # Properties of the new raster
+        max_id = arcpy.GetRasterProperties_management(rasterized_polygons, "MAXIMUM")
+
+        # Reclassify rasterized polygons
+        reclassified_poly_raster = Reclassify(in_raster=rasterized_polygons,
+                                              reclass_field="VALUE",
+                                              remap=RemapRange([[0, max_id, 0]]))
+        arcpy.AddMessage("Rasterized polygons have been reclassified.")
+
+        # Mosaic to new raster
+        arcpy.MosaicToNewRaster_management(input_rasters=[reclassified_poly_raster, reclassified_input_raster],
+                                           output_location=workspace,
+                                           raster_dataset_name_with_extension="depth_buildings_raster",
+                                           pixel_type="1_BIT",
+                                           cellsize=cell_size,
+                                           number_of_bands=1,
+                                           mosaic_method="FIRST",
+                                           mosaic_colormap_mode="FIRST")
+        arcpy.AddMessage('New raster has been created.')
+
+        # Set null
+        out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
+                               in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
+                               where_clause="Value = 0")
+    else:
+        # Set null
+        out_set_null = SetNull(in_conditional_raster=reclassified_input_raster,
+                               in_false_raster_or_constant=reclassified_input_raster,
+                               where_clause="Value = 0")
+    arcpy.AddMessage("Null values have been assigned.")
+
+    # Check if the domain was predefined
+    if domain != '':
+        out_set_null_clipped = workspace + r"/out_set_null_clipped"
+        layers_to_remove.append(out_set_null_clipped)
+        # Clip
+        arcpy.Clip_management(in_raster=out_set_null,
+                              rectangle=extent,
+                              out_raster=out_set_null_clipped,
+                              in_template_dataset=domain,
+                              clipping_geometry="ClippingGeometry",
+                              maintain_clipping_extent="NO_MAINTAIN_EXTENT")
+        arcpy.AddMessage('Raster has been clipped.')
+
+        # Extract by mask
+        # created_mask = ExtractByMask(input_raster, out_set_null_clipped)
+        created_mask = out_set_null_clipped
+    else:
+        # Extract by mask
+        # created_mask = ExtractByMask(input_raster, out_set_null)
+        created_mask = out_set_null
+
+    arcpy.AddMessage('Mask has been created.')
+    for layer in layers_to_remove:
+        arcpy.Delete_management(layer)
+    arcpy.AddMessage('Temporary files have been removed.')
+    return created_mask
+
+
+def mike_tools_decoder(input_name, group_number, variable_value):
+    # Klaralven coding. Useless?
+    """
+    #0 Whole expression
+    #1 Name
+    #2 Simulation number
+    #3 Cell size
+    #4 Time step
+    #5 Item
+    #6 Mask
+    """
+    pattern = re.compile(
+        r'([a-zA-Z]+)_sim(\d+)_(\d+)m_ts(\d+)_(Surface_elevation|Current_speed|Total_water_depth)(_mask|)')
+    matches = pattern.finditer(input_name)
+    for match in matches:
+        if group_number == 5 and match.group(group_number) == variable_value:
+            return match.group(0)
+        elif group_number == 5 and match.group(group_number) != variable_value:
+            break
+        elif group_number == 6 and match.group(group_number) == variable_value:
+            return match.group(0)
+        elif group_number == 6 and match.group(group_number) != variable_value:
+            break
+        else:
+            return match.group(group_number)

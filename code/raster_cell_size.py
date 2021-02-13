@@ -1,5 +1,5 @@
 import arcpy
-from Functions import raster_cell_size
+from functions import raster_cell_size
 
 # Input
 input_raster = arcpy.GetParameterAsText(0)
