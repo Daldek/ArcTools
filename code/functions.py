@@ -495,10 +495,12 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     catchment = workspace + r"/catchment"
     catchment_buffer = workspace + r"/catchment_buffer"
     catchment_simple = workspace + r"/catchment_simple"
+    catchment_box = workspace + r"/catchment_box"
     # catchment_wall = workspace + r"/catchment_wall"
     # rasterized_wall = workspace + r"/rasterized_wall"
     rasterized_buildings = workspace + r"/rasterized_buildings"
     rasterized_buildings_calc = workspace + r"/rasterized_buildings_calc"
+    rasterized_catchment_box = workspace + r"/rasterized_catchment_box"
     # clipped_dem = workspace + r"/clipped_dem"
     dem_buildings = workspace + r"/dem_buildings"
     field_name = "new_elev"
@@ -524,7 +526,9 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                         landuse_grid,
                         slope_grid,
                         steep_slopes_grid,
-                        steep_slopes_grid_clip]
+                        steep_slopes_grid_clip,
+                        catchment_box,
+                        rasterized_catchment_box]
 
     # Catchment
     # Add field
@@ -564,6 +568,11 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                        collapsed_point_option="NO_KEEP")
     arcpy.AddMessage("The catchment are has been simplified.")
 
+    # Minimum bounding geometry
+    arcpy.MinimumBoundingGeometry_management(in_features=catchment_simple,
+                                             out_feature_class=catchment_box,
+                                             geometry_type="ENVELOPE")
+
     # Buildings
     # Add field
     arcpy.AddField_management(buildings, field_name, "SHORT")
@@ -602,17 +611,38 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.AddMessage("New DEM has been built.")
 
     # New extent
-    extent = feature_extent(catchment_simple)
-    arcpy.AddMessage("Catchment extent: " + str(extent))
+    extent = feature_extent(catchment_box)
+    arcpy.AddMessage("Box extent: " + str(extent))
 
     # Env extent - for some unknown reason clipped rasters have same extent as in_dem. I would like them to be smaller
-    desc = arcpy.Describe(catchment_simple)
+    desc = arcpy.Describe(catchment_box)
     x_max = desc.extent.XMax
     y_max = desc.extent.YMax
     x_min = desc.extent.XMin
     y_min = desc.extent.YMin
     arcpy.env.extent = arcpy.Extent(x_min, y_min, x_max, y_max)
+
+    arcpy.PolygonToRaster_conversion(in_features=catchment_box,
+                                     value_field="OBJECTID",
+                                     out_rasterdataset=rasterized_catchment_box,
+                                     cellsize=cell_size)
+
+    left = arcpy.GetRasterProperties_management(rasterized_catchment_box, "LEFT")
+    left = str(left)
+    left = left.replace(',', '.')
+    bottom = arcpy.GetRasterProperties_management(rasterized_catchment_box, "BOTTOM")
+    bottom = str(bottom)
+    bottom = bottom.replace(',', '.')
+    right = arcpy.GetRasterProperties_management(rasterized_catchment_box, "RIGHT")
+    right = str(right)
+    right = right.replace(',', '.')
+    top = arcpy.GetRasterProperties_management(rasterized_catchment_box, "TOP")
+    top = str(top)
+    top = top.replace(',', '.')
+    arcpy.env.extent = arcpy.Extent(left, bottom, right, top)
+
     arcpy.AddMessage('New environment settings set.')
+    arcpy.AddMessage("Model extent: " + str(left) + " " + str(bottom) + " " + str(right) + " " + str(top))
 
     '''
     NEW DIGITAL ELEVATION MODEL
