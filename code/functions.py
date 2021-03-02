@@ -717,7 +717,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
 
     # Reclassify
     additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
-                                                                       [inclination, 180, 998]]))
+                                                                       [inclination, 90, 255]]))
     additional_roughness.save(steep_slopes_grid)
     arcpy.AddMessage("Raster has been reclassified.")
 
@@ -735,7 +735,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.MosaicToNewRaster_management(input_rasters=roughness_mosaic_list,
                                        output_location=workspace,
                                        raster_dataset_name_with_extension="roughness_grid",
-                                       pixel_type="16_BIT_UNSIGNED",
+                                       pixel_type="8_BIT_UNSIGNED",
                                        cellsize=cell_size,
                                        number_of_bands=1,
                                        mosaic_method="FIRST",
