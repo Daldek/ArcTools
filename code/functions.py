@@ -494,7 +494,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     # Elevation model
     catchment = workspace + r"/catchment"
     catchment_buffer = workspace + r"/catchment_buffer"
-    catchment_simple = workspace + r"/catchment_simple"
+    catchment_simple = workspace + r"/model_domain"  # Renamed
     catchment_box = workspace + r"/catchment_box"
     # catchment_wall = workspace + r"/catchment_wall"
     # rasterized_wall = workspace + r"/rasterized_wall"
@@ -717,7 +717,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
 
     # Reclassify
     additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
-                                                                       [inclination, 180, 998]]))
+                                                                       [inclination, 90, 255]]))
     additional_roughness.save(steep_slopes_grid)
     arcpy.AddMessage("Raster has been reclassified.")
 
@@ -735,7 +735,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.MosaicToNewRaster_management(input_rasters=roughness_mosaic_list,
                                        output_location=workspace,
                                        raster_dataset_name_with_extension="roughness_grid",
-                                       pixel_type="16_BIT_UNSIGNED",
+                                       pixel_type="8_BIT_UNSIGNED",
                                        cellsize=cell_size,
                                        number_of_bands=1,
                                        mosaic_method="FIRST",
@@ -759,6 +759,12 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     roughness_output_file = output_folder + str("/roughness.asc")
     arcpy.RasterToASCII_conversion("roughness_grid", roughness_output_file)
     arcpy.AddMessage("Roughness raster has been exported to ASCII.")
+
+    # Model domain to Shapefile
+    domain_output_shapefile = "model_domain.shp"
+    arcpy.FeatureClassToShapefile_conversion(Input_Features=catchment_simple,
+                                             Output_Folder=output_folder)
+    arcpy.AddMessage("Model boundary has been exported to Shapefile.")
 
     # ASCII validation
     columns_rows_check(land_use_output_file, model_domain_output_file, roughness_output_file)
