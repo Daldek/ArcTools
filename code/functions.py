@@ -761,7 +761,6 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.AddMessage("Roughness raster has been exported to ASCII.")
 
     # Model domain to Shapefile
-    domain_output_shapefile = "model_domain.shp"
     arcpy.FeatureClassToShapefile_conversion(Input_Features=catchment_simple,
                                              Output_Folder=output_folder)
     arcpy.AddMessage("Model boundary has been exported to Shapefile.")
