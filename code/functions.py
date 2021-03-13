@@ -574,13 +574,13 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
     :param workspace: a geodatabase in which a results will be stored
     :param input_raster: "Filled_channels" from function "raster_manipulation" or any other digital elevation model
-    :param rise: Height of buildings
+    :param rise: Height of buildings [m]
     :param catchments: a feature class containing the selected catchments from the "catchment_delineation" function
     or any other polygon
     :param buildings: a feature class containing buildings (polygons)
     :param landuse_raster: a raster with land use
-    :param inclination: slope limit value beyond which an additional roughness value (equal to 255) will be created
-    :param buffer_distance: size of the buffer by which the terrain model will be extended
+    :param inclination: slope value beyond which an additional roughness value (equal to 255) will be created [degree]
+    :param buffer_distance: size of the buffer by which the terrain model will be extended [m]
     :param output_folder: the folder where the ASCII files are to be saved
     :return: confirmation of successful function execution. Additionally, 3 ASCII files are created
     """
@@ -589,7 +589,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     # Elevation model
     catchment = workspace + r"/catchment"
     catchment_buffer = workspace + r"/catchment_buffer"
-    catchment_simple = workspace + r"/model_domain"  # Renamed
+    catchment_simple = workspace + r"/model_boundary"  # Renamed
     catchment_box = workspace + r"/catchment_box"
     # catchment_wall = workspace + r"/catchment_wall"
     # rasterized_wall = workspace + r"/rasterized_wall"
