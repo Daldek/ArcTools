@@ -2,11 +2,19 @@ import re
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
-import arcpy.cartography as CA
+import arcpy.cartography as ca
 arcpy.CheckOutExtension("Spatial")
 
 
 def square_km_to_cells(area, cell_size):
+
+    """
+    Converting square kilometers to number of cells in a raster
+    :param area: area to be recalculated [sq. km]
+    :param cell_size: raster cell size [sq. m]
+    :return: number of cells with total area corresponding to the input area [-]
+    """
+
     area = float(area)
     area = (area * 1000000) / (2 * cell_size)
     area = int(area)
@@ -15,6 +23,14 @@ def square_km_to_cells(area, cell_size):
 
 
 def raster_cell_size(input_raster):
+
+    """
+    Determining of average raster cell size
+    :param input_raster: a raster whose cell size will be returned
+    :return: average cell size in X and Y axis [m]. Example: if the width of the cell in the X axis is 1 and the length
+    in the Y axis is 3, then a value of 2 will be returned
+    """
+
     x_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEX")
     y_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEY")
     x_direction = float(x_direction.getOutput(0))
@@ -27,6 +43,14 @@ def raster_cell_size(input_raster):
 
 
 def raster_extent(input_raster):
+
+    """
+    Determining the maximum range of a raster
+    :param input_raster: a raster whose range will be returned
+    :return: a single string containing the extent of the raster. The order of the boundaries is
+    x_min, y_min, x_max, y_max, separated by spaces
+    """
+
     x_min = arcpy.GetRasterProperties_management(input_raster, "LEFT")
     y_min = arcpy.GetRasterProperties_management(input_raster, "BOTTOM")
     x_max = arcpy.GetRasterProperties_management(input_raster, "RIGHT")
@@ -36,6 +60,14 @@ def raster_extent(input_raster):
 
 
 def feature_extent(input_feature):
+
+    """
+    Determining the maximum range of a feature class
+    :param input_feature: a feature class whose range will be returned
+    :return: a single string containing the extent of the feature class. The order of the boundaries is
+    x_min, y_min, x_max, y_max, separated by spaces
+    """
+
     desc = arcpy.Describe(input_feature)
     x_max = desc.extent.XMax
     y_max = desc.extent.YMax
@@ -46,6 +78,19 @@ def feature_extent(input_feature):
 
 
 def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
+
+    """
+    Fill artificially deepened channels in such a way that they do not increase channel retention. The newly dredged bed
+    must not be deeper than the nearest adjacent cell
+    :param workspace: a geodatabase in which a results will be stored
+    :param input_raster: a input raster on which the filling operation will be performed
+    :param channel_width: channel width. This is the buffer that will be created around a polyline representing
+    the axis of a channel, culvert, or other object
+    :param channel_axis: a feature class representing a channel, culvert or other object
+    :return: raster on which the filling operations were performed. The fill was constrained with a buffer around
+    the polyline so that the artificially deepened channels were filled to the height of the lowest adjacent cell
+    """
+
     # Variables
     ditch_buffer = workspace + r"/ditch_buffer"
     ditch_raster = workspace + r"/ditch_raster"
@@ -98,11 +143,22 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
 
 
 def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodies):
+
+    """
+    Function whose purpose is to rasterize polygons and then use them to create NoData areas. The NoData areas
+    created inside the raster, will allow water to flow not only to the outer edges, but also into these areas.
+    :param workspace: a geodatabase in which a results will be stored
+    :param input_raster: a raster (digital elevation model) to be modified
+    :param cell_size: input raster cell size
+    :param water_bodies: a feature class (polygons) representing NoData areas that will be created
+    :return: a modified raster
+    """
+
     # Variables
     new_field_name = "LakeElev"
     lakes = workspace + r"/lakes"
     dem_manip = workspace + r"/dem_manip"
-    dem_lakes = workspace + r"\dem_lakes"
+    dem_lakes = workspace + r"/dem_lakes"
 
     if cell_size == '#':
         cell_size = raster_cell_size(input_raster)
@@ -163,6 +219,24 @@ def raster_manipulation(workspace,
                         sharp_drop,
                         endorheic_water_bodies,
                         creating_agreedem):
+
+    """
+    The first of the main functions. Its purpose is to remove user-selected obstacles or deepen channels.
+    Removal consists of creating a feature class (polyline) representing the axis in relation to which the dredging
+    operation will be performed.
+    :param workspace: a geodatabase in which a results will be stored
+    :param input_raster: a raster (digital elevation model) to be modified
+    :param culverts: a feature class (polyline) representing culverts or other objects
+    :param channel_width: width of the channel (not a bottom, but a "top edge") [m]
+    :param smooth_drop: expected depth of channels [m]
+    :param sharp_drop: additional dredging depth to make sure the obstruction is removed [m]
+    :param endorheic_water_bodies: drainless areas that we want to take into account
+    :param creating_agreedem: variable that determines whether an "AgreeDEM" raster is created.
+    "AgreeDEM" is an input raster to the "catchment_delineation" function
+    :return: confirmation of successful function execution. In addition, two rasters "AgreeDEM" and "Filled_channels"
+    are created
+    """
+
     # Variables
     smooth_drop *= 1000
     sharp_drop *= 1000
@@ -305,14 +379,6 @@ def raster_manipulation(workspace,
     mosaic_list = [smooth_mod_geo, sharp_mod_geo]
     arcpy.Mosaic_management(mosaic_list, buffer_elev_geo,
                             "LAST", "FIRST", "", "", "NONE")
-    """
-    THESE APPROACHES DO NOT WORK - WRONG NUMBER OF BANDS
-
-    arcpy.Mosaic_management(inputs="smooth_mod_geo;sharp_mod_geo",
-                            target=buffer_elev_geo,
-                            mosaic_type="LAST",
-                            colormap="FIRST")
-    """
     arcpy.AddMessage('Mosaic. Done.')
 
     # Con #3
@@ -357,6 +423,19 @@ def raster_manipulation(workspace,
 
 
 def catchment_delineation(workspace, input_raster, catchment_area):
+
+    """
+    This is the second major function. Its purpose is to delineate catchment boundaries.
+    A catchment is delineated based on a Flow Accumultaion raster, which is reclassified based on the catchment_area
+    parameter. All cells with a higher value are considered part of the river system. At each nodal point, which is
+    where two watercourses join, a catchment is created.
+    :param workspace: a geodatabase in which a results will be stored
+    :param input_raster: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
+    :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]
+    :return: confirmation of successful function execution. Additionally, a feature class (polyline) representing
+    the river network is created, as well as a feature class (polygon) containing all generated catchments
+    """
+
     # Variables
     streams = workspace + r"/streams"
     temp_basin = workspace + r"/tempBasin"
@@ -490,6 +569,22 @@ def catchment_delineation(workspace, input_raster, catchment_area):
 
 def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster,
                     inclination, buffer_distance, output_folder):
+
+    """
+    The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
+    :param workspace: a geodatabase in which a results will be stored
+    :param input_raster: "Filled_channels" from function "raster_manipulation" or any other digital elevation model
+    :param rise: Height of buildings
+    :param catchments: a feature class containing the selected catchments from the "catchment_delineation" function
+    or any other polygon
+    :param buildings: a feature class containing buildings (polygons)
+    :param landuse_raster: a raster with land use
+    :param inclination: slope limit value beyond which an additional roughness value (equal to 255) will be created
+    :param buffer_distance: size of the buffer by which the terrain model will be extended
+    :param output_folder: the folder where the ASCII files are to be saved
+    :return: confirmation of successful function execution. Additionally, 3 ASCII files are created
+    """
+
     # Variables
     # Elevation model
     catchment = workspace + r"/catchment"
@@ -560,7 +655,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.AddMessage("The catchment area has been extended.")
 
     # Simplify polygon (catchment)
-    CA.SimplifyPolygon(in_features=catchment_buffer,
+    ca.SimplifyPolygon(in_features=catchment_buffer,
                        out_feature_class=catchment_simple,
                        algorithm="POINT_REMOVE",
                        tolerance=(buffer_distance/2),
