@@ -1,6 +1,17 @@
 class AscFile:
 
+    """
+    This class analyzes an ASCII file header. This analysis can be used to compare 2 (or more) ASCII files
+    used in Mike21 models
+    """
+
     def __init__(self, path):
+
+        """
+        Class initialization
+        :param path: path to an ASCII (ESRI grid) file
+        """
+
         self.path = path
         self.asc_file = ''
         self.ncols = ''

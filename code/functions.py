@@ -1,4 +1,3 @@
-import re
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
@@ -82,7 +81,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     """
     Fill artificially deepened channels in such a way that they do not increase channel retention. The newly dredged bed
     must not be deeper than the nearest adjacent cell
-    :param workspace: a geodatabase in which a results will be stored
+    :param workspace: a geodatabase in which results will be stored
     :param input_raster: a input raster on which the filling operation will be performed
     :param channel_width: channel width. This is the buffer that will be created around a polyline representing
     the axis of a channel, culvert, or other object
@@ -147,7 +146,7 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     """
     Function whose purpose is to rasterize polygons and then use them to create NoData areas. The NoData areas
     created inside the raster, will allow water to flow not only to the outer edges, but also into these areas.
-    :param workspace: a geodatabase in which a results will be stored
+    :param workspace: a geodatabase in which results will be stored
     :param input_raster: a raster (digital elevation model) to be modified
     :param cell_size: input raster cell size
     :param water_bodies: a feature class (polygons) representing NoData areas that will be created
@@ -224,7 +223,7 @@ def raster_manipulation(workspace,
     The first of the main functions. Its purpose is to remove user-selected obstacles or deepen channels.
     Removal consists of creating a feature class (polyline) representing the axis in relation to which the dredging
     operation will be performed.
-    :param workspace: a geodatabase in which a results will be stored
+    :param workspace: a geodatabase in which results will be stored
     :param input_raster: a raster (digital elevation model) to be modified
     :param culverts: a feature class (polyline) representing culverts or other objects
     :param channel_width: width of the channel (not a bottom, but a "top edge") [m]
@@ -429,7 +428,7 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     A catchment is delineated based on a Flow Accumultaion raster, which is reclassified based on the catchment_area
     parameter. All cells with a higher value are considered part of the river system. At each nodal point, which is
     where two watercourses join, a catchment is created.
-    :param workspace: a geodatabase in which a results will be stored
+    :param workspace: a geodatabase in which results will be stored
     :param input_raster: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
     :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]
     :return: confirmation of successful function execution. Additionally, a feature class (polyline) representing
@@ -572,7 +571,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
 
     """
     The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
-    :param workspace: a geodatabase in which a results will be stored
+    :param workspace: a geodatabase in which results will be stored
     :param input_raster: "Filled_channels" from function "raster_manipulation" or any other digital elevation model
     :param rise: Height of buildings [m]
     :param catchments: a feature class containing the selected catchments from the "catchment_delineation" function
@@ -869,6 +868,14 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
 
 
 def gap_interpolation(radius, input_raster):
+
+    """
+    This function is used to interpolate the NoData cell values inside the raster
+    :param radius: a radius of the area around the cell that will be used to interpolate the values [m]
+    :param input_raster: a raster whose cells we want to interpolate
+    :return: a new raster
+    """
+
     out_con = Con(in_conditional_raster=IsNull(input_raster),
                   in_true_raster_or_constant=FocalStatistics(in_raster=input_raster,
                                                              neighborhood=NbrRectangle(width=radius,
@@ -881,6 +888,16 @@ def gap_interpolation(radius, input_raster):
 
 
 def columns_rows_check(land_use_path, model_domain_path, roughness_path):
+
+    """
+    This function analyzes the 3 ASCII files created by the "domain_creation" function. Its purpose is to check
+    the consistency of the headers
+    :param land_use_path: path to land_use file
+    :param model_domain_path: path to model_domain file
+    :param roughness_path: path to roughness file
+    :return: confirmation of successful function execution
+    """
+
     land_use = open(land_use_path, "r")
     model_domain = open(model_domain_path, "r")
     roughness = open(roughness_path, "r")
@@ -922,6 +939,18 @@ def columns_rows_check(land_use_path, model_domain_path, roughness_path):
 def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
             coordinate_system, class_codes, cell_size, output_raster_name):
 
+    """
+    A function that converts las files (folder) to raster
+    :param workspace_gdb: a geodatabase in which results will be stored
+    :param workspace_folder: a folder in which intermediate steps will be stored
+    :param input_las_catalog: a folder which contains input las data (folder)
+    :param coordinate_system: las files coordinate system
+    :param class_codes: desktop.arcgis.com/en/arcmap/latest/manage-data/las-dataset/lidar-point-classification.htm
+    :param cell_size: output raster cell size [m]
+    :param output_raster_name: output raster file name
+    :return: confirmation of successful function execution
+    """
+
     # Variables
     output_raster_path = workspace_gdb + r"/" + str(output_raster_name)
     output_las = workspace_folder + r"/LasDataset.lasd"
@@ -960,6 +989,21 @@ def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
 
 
 def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, nodata_polygons, domain):
+
+    """
+    Function that removes raster cells with a value lower than the threshold value.
+    Example: If we have a raster with water depth, flow velocity, and elevation, and our parameter is a minimum depth
+    of 10 cm, then we can perform this analysis on the depth raster and use the mask created this way to crop
+    the other rasters
+    :param workspace: a geodatabase in which results will be stored
+    :param cell_size: input raster cell size [m]
+    :param input_raster: a raster to be modified
+    :param threshold_value: cells with a value lower than this will be converted to NoData [-]
+    :param nodata_polygons: additional NoData areas
+    :param domain: a feature class (polygon) limiting the scope of analysis
+    :return: a raster that will be used as a mask to crop other rasters
+    """
+
     # Variables
     layers_to_remove = []
 
@@ -1047,30 +1091,3 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
         arcpy.Delete_management(layer)
     arcpy.AddMessage('Temporary files have been removed.')
     return created_mask
-
-
-def mike_tools_decoder(input_name, group_number, variable_value):
-    # Klaralven coding. Useless?
-    """
-    #0 Whole expression
-    #1 Name
-    #2 Simulation number
-    #3 Cell size
-    #4 Time step
-    #5 Item
-    #6 Mask
-    """
-    pattern = re.compile(
-        r'([a-zA-Z]+)_sim(\d+)_(\d+)m_ts(\d+)_(Surface_elevation|Current_speed|Total_water_depth)(_mask|)')
-    matches = pattern.finditer(input_name)
-    for match in matches:
-        if group_number == 5 and match.group(group_number) == variable_value:
-            return match.group(0)
-        elif group_number == 5 and match.group(group_number) != variable_value:
-            break
-        elif group_number == 6 and match.group(group_number) == variable_value:
-            return match.group(0)
-        elif group_number == 6 and match.group(group_number) != variable_value:
-            break
-        else:
-            return match.group(group_number)
