@@ -428,6 +428,7 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     A catchment is delineated based on a Flow Accumultaion raster, which is reclassified based on the catchment_area
     parameter. All cells with a higher value are considered part of the river system. At each nodal point, which is
     where two watercourses join, a catchment is created.
+    Read more: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/identifying-stream-networks.htm
     :param workspace: a geodatabase in which results will be stored
     :param input_raster: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
     :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]

@@ -1,21 +1,19 @@
 # ArcTools
 
 Python tools for manipulating a Digital Elevation Model, removing obstacles (polyline based) 
-and creating an ASCII GRID file.
+and creating an ASCII GRID files (elevation model, land use and roughness).
 
 **Features**
 - Remove culverts, bridges, etc. to allow water to flow under/through constructions
-- Fill sinks to create a hydrologically correct surface
-- Catchment delineation
-- Create an endorheic catchments (optional)
-- Create an outer boundary to keep the water inside model domain to avoid calculation errors
-- Export DEM to ESRI GRID
+- Fill sinks to create a hydrologically correct (drainless) surface
+- Catchment delineation [More](https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/how-watershed-works.htm)
+- Create an endorheic catchments (optional) [Wikipedia](https://en.wikipedia.org/wiki/Endorheic_basin)
+- Export DEM to Esri GRID (ASCII) [Wikipedia](https://en.wikipedia.org/wiki/Esri_grid)
 
 ## Install
 **Requirements**
-- ArcMap 10.7.1
-- ArcMap 10.8.1 (even better than 10.7.1)
-- Git (not required, but will make things easier)
+- ArcMap 10.7 or later
+- Git (not required, but will make things easier). [Wikipedia](https://en.wikipedia.org/wiki/Git)
 
 **Installation**
 
@@ -39,6 +37,12 @@ this code:
 ```shell
 $ git pull https://github.com/Daldek/ArcTools.git
 ```
+
+If you have made changes to the code yourself and want to discard them (permanently):
+```shell
+$ git reset --hard
+```
+
 > In ArcMap:
 - Make sure the repository on your computer is connected to your ArcMap 
 (Catalog -> Connect To Folder)
@@ -53,29 +57,29 @@ $ git pull https://github.com/Daldek/ArcTools.git
 > Main scripts
 - **Raster Manipulation**
     - Workspace
-    - Culverts or river network
-    - Endroheic water bodies (optional)
+    - Culverts or river network (feature class)
+    - Endroheic water bodies (optional, feature class)
     - DEM
-    - Channel width (default recommended value for raster with 2 m pixel resolution = 4)
-    - Channel depth (recommended value = 2)
-    - Sharp drop (recommended value = 10)
+    - Channel width (default recommended value for raster with 2 m pixel resolution ≥ 4) [m]
+    - Channel depth [m]
+    - Sharp drop (recommended value ≥ 10) [m]
+    - Confirmation of raster execution "AgreeDEM"
 
 - **Catchment delineation**
     - Workspace
     - Raster ("AgreeDEM" from "Raster Manipulation" script)
-    - Catchment Area (default = 0,25 sq.km)
-    - Output file name
+    - Catchment Area (default = 0,25) [sq. km]
 
 - **Domain Creation**
     - Workspace
     - DEM ("filled_sinks" from "Raster Manipulation" script)
-    - Rise (building heights)
-    - Selected catchments (Select catchment from "Catchment delineation" script 
+    - Rise (building heights, recommended value = 2) [m]
+    - Selected catchments (Select catchment from "Catchment_delineation" script (feature class)
     and save as a new feature class)
-    - Buildings
+    - Buildings (feature class)
     - Land use raster
-    - Inclination
-    - buffer distance
+    - Inclination [degree]
+    - buffer distance (selected catchment will be enlarged by this width) [m]
     - Output folder
 
 - **MIKE2xyz**
@@ -95,8 +99,7 @@ $ git pull https://github.com/Daldek/ArcTools.git
 - **How can I help you develop your code?**
     - Clone this repo and play with your data. Or make a pull request :)
 - **Can I use shapefiles instead of geodatabses and feature classes?**
-    - Not recommended. With a probability of 99,99% it will not work. Unless there is
-    a "OBJECTID" column in the table of contents. One day I will try to fix it.
+    - No.
 - **Can I specify the buffer and depth for each polyline?**
     - No. It is a fixed value which is specified before you start the script.
 - **Buffer? What buffer? What are you talking about?**
@@ -111,4 +114,4 @@ $ git pull https://github.com/Daldek/ArcTools.git
 
 ## Documentation
 
-Soon ;)
+ಠ_ಠ
