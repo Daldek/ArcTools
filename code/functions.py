@@ -1,7 +1,9 @@
+import os
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
 import arcpy.cartography as ca
+from classes import *
 arcpy.CheckOutExtension("Spatial")
 
 
@@ -567,8 +569,7 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     return output
 
 
-def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster,
-                    inclination, buffer_distance, output_folder):
+def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer_distance, output_folder):
 
     """
     The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
@@ -578,8 +579,6 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     :param catchments: a feature class containing the selected catchments from the "catchment_delineation" function
     or any other polygon
     :param buildings: a feature class containing buildings (polygons)
-    :param landuse_raster: a raster with land use
-    :param inclination: slope value beyond which an additional roughness value (equal to 255) will be created [degree]
     :param buffer_distance: size of the buffer by which the terrain model will be extended [m]
     :param output_folder: the folder where the ASCII files are to be saved
     :return: confirmation of successful function execution. Additionally, 3 ASCII files are created
@@ -591,24 +590,12 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     catchment_buffer = workspace + r"/catchment_buffer"
     catchment_simple = workspace + r"/model_boundary"  # Renamed
     catchment_box = workspace + r"/catchment_box"
-    # catchment_wall = workspace + r"/catchment_wall"
-    # rasterized_wall = workspace + r"/rasterized_wall"
     rasterized_buildings = workspace + r"/rasterized_buildings"
     rasterized_buildings_calc = workspace + r"/rasterized_buildings_calc"
     rasterized_catchment_box = workspace + r"/rasterized_catchment_box"
-    # clipped_dem = workspace + r"/clipped_dem"
     dem_buildings = workspace + r"/dem_buildings"
     field_name = "new_elev"
     model_domain_grid = workspace + r"/model_domain_grid"
-
-    # Land use raster
-    land_use_clip = workspace + r"/land_use_clip"
-    landuse_grid = workspace + r"/landuse_grid"
-
-    # Roughness rasters
-    slope_grid = workspace + r"/slope_grid"
-    steep_slopes_grid = workspace + r"/steep_slopes_grid"
-    steep_slopes_grid_clip = workspace + r"/steep_slopes_grid_clip"
 
     layers_to_remove = [catchment,
                         catchment_buffer,
@@ -617,11 +604,6 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                         rasterized_buildings_calc,
                         dem_buildings,
                         model_domain_grid,
-                        land_use_clip,
-                        landuse_grid,
-                        slope_grid,
-                        steep_slopes_grid,
-                        steep_slopes_grid_clip,
                         catchment_box,
                         rasterized_catchment_box]
 
@@ -709,7 +691,8 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     extent = feature_extent(catchment_box)
     arcpy.AddMessage("Box extent: " + str(extent))
 
-    # Env extent - for some unknown reason clipped rasters have same extent as in_dem. I would like them to be smaller
+    # Env extent - for some unknown reason clipped rasters have the same extent as in_dem.
+    # I would like to make them smaller
     desc = arcpy.Describe(catchment_box)
     x_max = desc.extent.XMax
     y_max = desc.extent.YMax
@@ -752,116 +735,18 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
     arcpy.AddMessage("DEM has been clipped.")
 
-    # # Buffer
-    # buffer_dist = int(cell_size) * 2
-    # arcpy.Buffer_analysis(in_features=catchment_simple,
-    #                       out_feature_class=catchment_wall,
-    #                       buffer_distance_or_field=buffer_dist,
-    #                       line_side="OUTSIDE_ONLY")
-    # arcpy.AddMessage("Buffer has been created.")
-    #
-    # # Rasterize
-    # arcpy.FeatureToRaster_conversion(in_features=catchment_wall,
-    #                                  field=field_name,
-    #                                  out_raster=rasterized_wall,
-    #                                  cell_size=cell_size)
-    # arcpy.AddMessage("Buffer has been rasterized.")
-    #
-    # # Mosaic to new raster
-    # output_mosaic_list = [clipped_dem, rasterized_wall]
-    # arcpy.MosaicToNewRaster_management(input_rasters=output_mosaic_list,
-    #                                    output_location=workspace,
-    #                                    raster_dataset_name_with_extension="model_domain_grid",
-    #                                    pixel_type="32_BIT_FLOAT",
-    #                                    cellsize=cell_size,
-    #                                    number_of_bands=1,
-    #                                    mosaic_method="FIRST",
-    #                                    mosaic_colormap_mode="FIRST")
-    # arcpy.AddMessage("Domain raster has been built.")
-
-    '''
-    LAND USE GRID
-    '''
-    # Clip
-    arcpy.Clip_management(in_raster=landuse_raster,
-                          rectangle=extent,
-                          out_raster=landuse_grid,
-                          in_template_dataset=catchment_simple,
-                          clipping_geometry="ClippingGeometry",
-                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    arcpy.AddMessage("Land use raster has been clipped.")
-
-    # # Mosaic to new raster
-    # land_use_mosaic_list = [land_use_clip, rasterized_wall]
-    # arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
-    #                                    output_location=workspace,
-    #                                    raster_dataset_name_with_extension="landuse_grid",
-    #                                    pixel_type="16_BIT_UNSIGNED",
-    #                                    cellsize=cell_size,
-    #                                    number_of_bands=1,
-    #                                    mosaic_method="FIRST",
-    #                                    mosaic_colormap_mode="FIRST")
-    # arcpy.AddMessage("Lands use raster has been built.")
-
-    '''
-    ROUGHNESS GRID (LAND USE + STEEP SLOPES)
-    '''
-    # Slope
-    arcpy.Slope_3d(dem_buildings, slope_grid, "DEGREE", 1.0)
-    arcpy.AddMessage("Slopes have been calculated.")
-
-    # Reclassify
-    additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
-                                                                       [inclination, 90, 255]]))
-    additional_roughness.save(steep_slopes_grid)
-    arcpy.AddMessage("Raster has been reclassified.")
-
-    # Clip
-    arcpy.Clip_management(in_raster=steep_slopes_grid,
-                          rectangle=extent,
-                          out_raster=steep_slopes_grid_clip,
-                          in_template_dataset=catchment_simple,
-                          clipping_geometry="ClippingGeometry",
-                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    arcpy.AddMessage("Land use raster has been clipped.")
-
-    # Mosaic to new raster
-    roughness_mosaic_list = [steep_slopes_grid_clip, landuse_grid]
-    arcpy.MosaicToNewRaster_management(input_rasters=roughness_mosaic_list,
-                                       output_location=workspace,
-                                       raster_dataset_name_with_extension="roughness_grid",
-                                       pixel_type="8_BIT_UNSIGNED",
-                                       cellsize=cell_size,
-                                       number_of_bands=1,
-                                       mosaic_method="FIRST",
-                                       mosaic_colormap_mode="FIRST")
-    arcpy.AddMessage("Roughness raster has been built.")
-
     '''
     DATA EXPORT
     '''
     # Model domain to ASCII
-    model_domain_output_file = output_folder + str("/model_domain.asc")
+    model_domain_output_file = output_folder + str("/bathymetry.asc")
     arcpy.RasterToASCII_conversion("model_domain_grid", model_domain_output_file)
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
-
-    # Land use to ASCII
-    land_use_output_file = output_folder + str("/land_use.asc")
-    arcpy.RasterToASCII_conversion("landuse_grid", land_use_output_file)
-    arcpy.AddMessage("Land use raster has been exported to ASCII.")
-
-    # Roughness to ASCII
-    roughness_output_file = output_folder + str("/roughness.asc")
-    arcpy.RasterToASCII_conversion("roughness_grid", roughness_output_file)
-    arcpy.AddMessage("Roughness raster has been exported to ASCII.")
 
     # Model domain to Shapefile
     arcpy.FeatureClassToShapefile_conversion(Input_Features=catchment_simple,
                                              Output_Folder=output_folder)
     arcpy.AddMessage("Model boundary has been exported to Shapefile.")
-
-    # ASCII validation
-    columns_rows_check(land_use_output_file, model_domain_output_file, roughness_output_file)
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -1092,3 +977,36 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
         arcpy.Delete_management(layer)
     arcpy.AddMessage('Temporary files have been removed.')
     return created_mask
+
+
+def mask_and_export(mask, in_rasters, output_folder):
+    a = 0  # counter
+    b = len(in_rasters)
+    base_ascii = ''
+    mask_extension = mask.split('.')[-1]
+
+    # If the input mask file is an ASCII file, it will be used as a reference raster for validating new ASCII files
+    if mask_extension == 'asc':
+        base_ascii = AscFile(mask)
+
+    for raster in in_rasters:
+        arcpy.AddMessage('Progress: ' + str(a) + r'/' + str(b))
+        out_ascii_file = os.path.splitext(os.path.basename(raster))[0]  # extracting a raster name
+        out_ascii_file = str(output_folder) + '/' + out_ascii_file + '.asc'
+
+        # Phase 1 - processing
+        masked_raster = ExtractByMask(raster, mask)
+        arcpy.RasterToASCII_conversion(masked_raster, out_ascii_file)
+
+        # Phase 2 - validation
+        if a == 0 and base_ascii == '':
+            base_ascii = AscFile(out_ascii_file)
+        else:
+            another_ascii = AscFile(out_ascii_file)
+            if base_ascii.get_properties() != another_ascii.get_properties():
+                arcpy.AddMessage("/nRaster files does not match!/n")
+        arcpy.AddMessage('Ok!')
+        a += 1
+
+    arcpy.AddMessage('Progress: ' + str(a) + r'/' + str(b))
+    arcpy.AddMessage("Raster files have been exported.")

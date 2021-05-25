@@ -50,17 +50,14 @@ arcpy.AddMessage("Step 3 - complete!\n")
 
 # 4 - domain creation
 domain_creation(workspace, in_dem, 5, in_selected_catchment,
-                in_buildings, in_landuse, inclination, buffer_distance, output_folder)
+                in_buildings, buffer_distance, output_folder)
 arcpy.AddMessage("Step 4 - complete!\n")
 arcpy.AddMessage('Success!')
 
-# 5 - validation
-land_use = AscFile(r"..\temp\test_output\land_use.asc")
-model_domain = AscFile(r"..\temp\test_output\model_domain.asc")
-roughness = AscFile(r"..\temp\test_output\roughness.asc")
-
-if land_use.get_properties() == model_domain.get_properties() == roughness.get_properties():
-    print("Hurrey!")
+# 5 - export to ascii and validation
+mask = r"..\temp\test_output\bathymetry.asc"
+in_rasters = [r'..\data.gdb\in_landuse_sweref1800', r'..\data.gdb\in_raster_sweref1800']
+mask_and_export(mask, in_rasters, output_folder)
 
 # clean up
 shutil.rmtree(r"..\temp\test_output")
