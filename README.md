@@ -46,12 +46,12 @@ $ git reset --hard
 > In ArcMap:
 - Make sure the repository on your computer is connected to your ArcMap 
 (Catalog -> Connect To Folder)
-- Create a Geodatabase where you will keep your results
+- Create a Geodatabase where you want to keep your results
 - Create a Toolbox in a folder or in the Geodatabase (you can use existing ones if you have)
 - Right click on the Toolbox -> "Add" -> "Script..."
 - Choose "Store relative search path names (instead of absolute paths)"
 - Find the script which you want to add
-- Add parameters the the list and define the data types (can be "Any value")
+- Add parameters to the list and define the data types
 
 ## Parameters list
 > Main scripts
@@ -77,8 +77,6 @@ $ git reset --hard
     - Selected catchments (Select catchment from "Catchment_delineation" script (feature class)
     and save as a new feature class)
     - Buildings (feature class)
-    - Land use raster
-    - Inclination [degree]
     - buffer distance (selected catchment will be enlarged by this width) [m]
     - Output folder
 
