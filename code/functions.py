@@ -444,7 +444,7 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     temp_basin2 = "in_memory" + r"/tempBasin2"
     catchment_border = "in_memory" + r"/catchment_border"
     union_basins = "in_memory" + r"/union_basins"
-    layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
+    # layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
     catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
     output = workspace + r"/Catchments"
     expression = "VALUE > " + str(catchment_area)
@@ -563,13 +563,15 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     arcpy.DeleteField_management(in_table=output,
                                  drop_field="GridID")
     arcpy.AddMessage('Field has been removed.')
-    for layer in layers_to_remove:
-        arcpy.Delete_management(layer)
+    # for layer in layers_to_remove:
+    #     arcpy.Delete_management(layer)
+    arcpy.Delete_management("in_memory")
     arcpy.AddMessage('Temporary files have been removed.')
     return output
 
 
-def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer_distance, output_folder):
+def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer_distance,
+                    output_folder, simplify_catchment):
 
     """
     The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
@@ -581,6 +583,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     :param buildings: a feature class containing buildings (polygons)
     :param buffer_distance: size of the buffer by which the terrain model will be extended [m]
     :param output_folder: the folder where the ASCII files are to be saved
+    :param simplify_catchment: variable specyfing whether the final catchment area will be simplified
     :return: confirmation of successful function execution. Additionally, 3 ASCII files are created
     """
 
@@ -588,24 +591,26 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     # Elevation model
     catchment = "in_memory" + r"/catchment"
     catchment_buffer = "in_memory" + r"/catchment_buffer"
-    catchment_simple = "in_memory" + r"/model_boundary"  # Renamed
+    catchment_simple = "in_memory" + r"/catchment_simple"
+    model_boundary = "in_memory" + r"/model_boundary"
     catchment_box = "in_memory" + r"/catchment_box"
     rasterized_buildings = "in_memory" + r"/rasterized_buildings"
     rasterized_buildings_calc = "in_memory" + r"/rasterized_buildings_calc"
     rasterized_catchment_box = "in_memory" + r"/rasterized_catchment_box"
     dem_buildings = "in_memory" + r"/dem_buildings"
     field_name = "new_elev"
-    model_domain_grid = workspace + r"/model_domain_grid"
+    model_domain_grid = workspace + r"/model_domain_grid"  # I'd like to keep it in the workspace
 
-    layers_to_remove = [catchment,
-                        catchment_buffer,
-                        catchment_simple,
-                        rasterized_buildings,
-                        rasterized_buildings_calc,
-                        dem_buildings,
-                        model_domain_grid,
-                        catchment_box,
-                        rasterized_catchment_box]
+    # layers_to_remove = [catchment,
+    #                     catchment_buffer,
+    #                     catchment_simple,
+    #                     rasterized_buildings,
+    #                     rasterized_buildings_calc,
+    #                     dem_buildings,
+    #                     model_domain_grid,
+    #                     catchment_box,
+    #                     rasterized_catchment_box]
+    layers_to_remove = [model_domain_grid]
 
     # Catchment
     # Add field
@@ -629,24 +634,33 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     arcpy.AddMessage("New catchment has been created.")
 
     # Graphic buffer
-    arcpy.GraphicBuffer_analysis(in_features=catchment,
-                                 out_feature_class=catchment_buffer,
-                                 buffer_distance_or_field=buffer_distance,
-                                 line_caps="SQUARE",
-                                 line_joins="MITER")
-    arcpy.AddMessage("The catchment area has been extended.")
-
-    # Simplify polygon (catchment)
-    ca.SimplifyPolygon(in_features=catchment_buffer,
-                       out_feature_class=catchment_simple,
-                       algorithm="POINT_REMOVE",
-                       tolerance=(buffer_distance/2),
-                       error_option="NO_CHECK",
-                       collapsed_point_option="NO_KEEP")
-    arcpy.AddMessage("The catchment are has been simplified.")
+    if buffer_distance != 0:
+        arcpy.GraphicBuffer_analysis(in_features=catchment,
+                                     out_feature_class=catchment_buffer,
+                                     buffer_distance_or_field=buffer_distance,
+                                     line_caps="SQUARE",
+                                     line_joins="MITER")
+        arcpy.AddMessage("The catchment area has been extended.")
+        # Simplify polygon (catchment)
+        if simplify_catchment is True:
+            arcpy.AddMessage("Catchment areas will be simplified")
+            ca.SimplifyPolygon(in_features=catchment_buffer,
+                               out_feature_class=catchment_simple,
+                               algorithm="POINT_REMOVE",
+                               tolerance=(abs(buffer_distance) / 2),
+                               error_option="NO_CHECK",
+                               collapsed_point_option="NO_KEEP")
+            arcpy.AddMessage("The catchment are has been simplified.")
+            arcpy.CopyFeatures_management(catchment_simple, model_boundary)
+        else:
+            arcpy.AddMessage("Catchment area will not be simplified")
+            arcpy.CopyFeatures_management(catchment_buffer, model_boundary)
+    else:
+        # catchment_buffer = catchment
+        arcpy.CopyFeatures_management(catchment, model_boundary)
 
     # Minimum bounding geometry
-    arcpy.MinimumBoundingGeometry_management(in_features=catchment_simple,
+    arcpy.MinimumBoundingGeometry_management(in_features=model_boundary,
                                              out_feature_class=catchment_box,
                                              geometry_type="ENVELOPE")
 
@@ -729,7 +743,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     arcpy.Clip_management(in_raster=dem_buildings,
                           rectangle=extent,
                           out_raster=model_domain_grid,
-                          in_template_dataset=catchment_simple,
+                          in_template_dataset=model_boundary,
                           nodata_value="999",
                           clipping_geometry="ClippingGeometry",
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
@@ -744,12 +758,14 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
 
     # Model domain to Shapefile
-    arcpy.FeatureClassToShapefile_conversion(Input_Features=catchment_simple,
+    arcpy.FeatureClassToShapefile_conversion(Input_Features=model_boundary,
                                              Output_Folder=output_folder)
     arcpy.AddMessage("Model boundary has been exported to Shapefile.")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
+    arcpy.Delete_management("in_memory")
+    arcpy.AddMessage('Temporary files have been removed.')
     return 1
 
 

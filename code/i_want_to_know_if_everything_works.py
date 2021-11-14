@@ -6,8 +6,14 @@ from classes import *
 arcpy.AddMessage('Off we go!')
 
 # I have no idea what the code test should look like <lenny face>
+try:
+    shutil.rmtree(r"..\temp\test_output")
+except:
+    pass
 os.mkdir(r"..\temp\test_output")
-workspace = r"C:\Users\PLPD00293\Documents\ArcGIS\Default.gdb"
+current_user = os.getenv('username')
+workspace = "C:\\Users\\" + current_user + "\\Documents\\ArcGIS\\Default.gdb"
+print("Current user: " + current_user + "\nWorkspace: " + workspace)
 
 # main scripts
 # input data
@@ -23,7 +29,7 @@ maximum_distance = 4
 smooth_drop = 2
 catchment_area = 0.05
 sharp_drop = 10
-inclination = 30
+rise = 5
 buffer_distance = 10
 output_folder = r"..\temp\test_output"
 
@@ -50,20 +56,33 @@ catchment_delineation(workspace, agree_dem, catchment_area)
 # catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
 arcpy.AddMessage("Step 3 - complete!\n")
 
-# 4 - domain creation
-domain_creation(workspace, in_dem, 5, in_selected_catchment,
-                in_buildings, buffer_distance, output_folder)
+# 4 - domain creation (with catchment simplification)
+domain_creation(workspace, in_dem, rise, in_selected_catchment,
+                in_buildings, buffer_distance, output_folder, True)
 arcpy.AddMessage("Step 4 - complete!\n")
 arcpy.AddMessage('Success!')
 
-# 5 - export to ascii and validation
+# 5 - domain creation (without catchment simplification)
+domain_creation(workspace, in_dem, rise, in_selected_catchment,
+                in_buildings, buffer_distance, output_folder, False)
+arcpy.AddMessage("Step 5 - complete!\n")
+arcpy.AddMessage('Success!')
+
+buffer_distance = 0
+# 6 - domain creation (with catchment simplification, but without buffer)
+domain_creation(workspace, in_dem, rise, in_selected_catchment,
+                in_buildings, buffer_distance, output_folder, True)
+arcpy.AddMessage("Step 6 - complete!\n")
+arcpy.AddMessage('Success!')
+
+# 7 - export to ascii and validation
 mask = r"..\temp\test_output\bathymetry.asc"
 in_rasters = [r'..\data.gdb\in_landuse_sweref1800', r'..\data.gdb\in_raster_sweref1800']
 mask_and_export(mask, in_rasters, output_folder)
 
 # clean up
 arcpy.AddMessage('One moment, please...')
-shutil.rmtree(r"..\temp\test_output")
+arcpy.Delete_management("in_memory")
 os.remove('log')
 os.remove('.prj')
 arcpy.AddMessage('Ready!')
