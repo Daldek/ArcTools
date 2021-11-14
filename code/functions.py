@@ -17,7 +17,7 @@ def square_km_to_cells(area, cell_size):
     """
 
     area = float(area)
-    area = (area * 1000000) / (2 * cell_size)
+    area = (area * 1000000) / (cell_size * cell_size)
     area = int(area)
     arcpy.AddMessage('Area unit conversion completed.')
     return area
@@ -93,9 +93,9 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     """
 
     # Variables
-    ditch_buffer = workspace + r"/ditch_buffer"
-    ditch_raster = workspace + r"/ditch_raster"
-    ditch_fill = workspace + r"/ditch_fill"
+    ditch_buffer = "in_memory" + r"/ditch_buffer"
+    ditch_raster = "in_memory" + r"/ditch_raster"
+    ditch_fill = "in_memory" + r"/ditch_fill"
 
     arcpy.AddMessage('Initialization of the "raster_cell_size" function.')
     cell_size = raster_cell_size(input_raster)
@@ -124,7 +124,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     arcpy.AddMessage('Sinks have been filled.')
 
     # Mosaic to new raster
-    input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe list instead of string?
+    input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe a list instead of string?
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
                                        output_location=workspace,
                                        raster_dataset_name_with_extension="Filled_channels",
@@ -158,8 +158,8 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     # Variables
     new_field_name = "LakeElev"
     lakes = workspace + r"/lakes"
-    dem_manip = workspace + r"/dem_manip"
-    dem_lakes = workspace + r"/dem_lakes"
+    dem_manip = "in_memory" + r"/dem_manip"
+    dem_lakes = "in_memory" + r"/dem_lakes"
 
     if cell_size == '#':
         cell_size = raster_cell_size(input_raster)
@@ -191,7 +191,7 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     # Mosaic to new raster
     input_str = str(lakes) + "; " + str(input_raster)
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
-                                       output_location=workspace,
+                                       output_location="in_memory",
                                        raster_dataset_name_with_extension="dem_manip",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
@@ -201,8 +201,8 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     arcpy.AddMessage('New raster has been created.')
 
     # Set null
-    out_set_null = SetNull(in_conditional_raster=workspace + r"/dem_manip",
-                           in_false_raster_or_constant=workspace + r"/dem_manip",
+    out_set_null = SetNull(in_conditional_raster="in_memory" + r"/dem_manip",
+                           in_false_raster_or_constant="in_memory" + r"/dem_manip",
                            where_clause="Value = 9999")
     out_set_null.save(dem_lakes)
     arcpy.AddMessage('Null values have been assigned. New raster is ready.')
@@ -440,10 +440,10 @@ def catchment_delineation(workspace, input_raster, catchment_area):
 
     # Variables
     streams = workspace + r"/streams"
-    temp_basin = workspace + r"/tempBasin"
-    temp_basin2 = workspace + r"/tempBasin2"
-    catchment_border = workspace + r"/catchment_border"
-    union_basins = workspace + r"/union_basins"
+    temp_basin = "in_memory" + r"/tempBasin"
+    temp_basin2 = "in_memory" + r"/tempBasin2"
+    catchment_border = "in_memory" + r"/catchment_border"
+    union_basins = "in_memory" + r"/union_basins"
     layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
     catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
     output = workspace + r"/Catchments"
@@ -586,14 +586,14 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
 
     # Variables
     # Elevation model
-    catchment = workspace + r"/catchment"
-    catchment_buffer = workspace + r"/catchment_buffer"
-    catchment_simple = workspace + r"/model_boundary"  # Renamed
-    catchment_box = workspace + r"/catchment_box"
-    rasterized_buildings = workspace + r"/rasterized_buildings"
-    rasterized_buildings_calc = workspace + r"/rasterized_buildings_calc"
-    rasterized_catchment_box = workspace + r"/rasterized_catchment_box"
-    dem_buildings = workspace + r"/dem_buildings"
+    catchment = "in_memory" + r"/catchment"
+    catchment_buffer = "in_memory" + r"/catchment_buffer"
+    catchment_simple = "in_memory" + r"/model_boundary"  # Renamed
+    catchment_box = "in_memory" + r"/catchment_box"
+    rasterized_buildings = "in_memory" + r"/rasterized_buildings"
+    rasterized_buildings_calc = "in_memory" + r"/rasterized_buildings_calc"
+    rasterized_catchment_box = "in_memory" + r"/rasterized_catchment_box"
+    dem_buildings = "in_memory" + r"/dem_buildings"
     field_name = "new_elev"
     model_domain_grid = workspace + r"/model_domain_grid"
 
@@ -678,7 +678,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     # Mosaic to new raster
     dem_buildings_input = [rasterized_buildings_calc, input_raster]
     arcpy.MosaicToNewRaster_management(input_rasters=dem_buildings_input,
-                                       output_location=workspace,
+                                       output_location="in_memory",
                                        raster_dataset_name_with_extension="dem_buildings",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
@@ -773,55 +773,6 @@ def gap_interpolation(radius, input_raster):
     return out_con
 
 
-def columns_rows_check(land_use_path, model_domain_path, roughness_path):
-
-    """
-    This function analyzes the 3 ASCII files created by the "domain_creation" function. Its purpose is to check
-    the consistency of the headers
-    :param land_use_path: path to land_use file
-    :param model_domain_path: path to model_domain file
-    :param roughness_path: path to roughness file
-    :return: confirmation of successful function execution
-    """
-
-    land_use = open(land_use_path, "r")
-    model_domain = open(model_domain_path, "r")
-    roughness = open(roughness_path, "r")
-    model_domain_columns = model_domain.readline()
-    model_domain_rows = model_domain.readline()
-    model_domain_x = model_domain.readline()
-    model_domain_y = model_domain.readline()
-    land_use_columns = land_use.readline()
-    land_use_rows = land_use.readline()
-    land_use_x = land_use.readline()
-    land_use_y = land_use.readline()
-    roughness_columns = roughness.readline()
-    roughness_rows = roughness.readline()
-    roughness_x = roughness.readline()
-    roughness_y = roughness.readline()
-    if model_domain_columns == land_use_columns and\
-            land_use_columns == roughness_columns:
-        arcpy.AddMessage('Number of columns match')
-    else:
-        arcpy.AddMessage('Wrong number of columns')
-    if model_domain_rows == land_use_rows and\
-            land_use_rows == roughness_rows:
-        arcpy.AddMessage('Number of rows match')
-    else:
-        arcpy.AddMessage('Wrong number of rows')
-    if model_domain_x == land_use_x and\
-            land_use_x == roughness_x:
-        arcpy.AddMessage('X match')
-    else:
-        arcpy.AddMessage('Wrong X')
-    if model_domain_y == land_use_y and\
-            land_use_y == roughness_y:
-        arcpy.AddMessage('Y match')
-    else:
-        arcpy.AddMessage('Wrong Y')
-    return 1
-
-
 def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
             coordinate_system, class_codes, cell_size, output_raster_name):
 
@@ -909,8 +860,8 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
     # Check in polygons should be removed from raster
     if nodata_polygons != '':
-        rasterized_polygons = workspace + r"/rasterized_polygons"
-        depth_buildings_raster = workspace + r"/depth_buildings_raster"
+        rasterized_polygons = "in_memory" + r"/rasterized_polygons"
+        depth_buildings_raster = "in_memory" + r"/depth_buildings_raster"
         layers_to_remove.extend([rasterized_polygons, depth_buildings_raster])
         # Polygons to raster
         arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
@@ -931,7 +882,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
         # Mosaic to new raster
         arcpy.MosaicToNewRaster_management(input_rasters=[reclassified_poly_raster, reclassified_input_raster],
-                                           output_location=workspace,
+                                           output_location="in_memory",
                                            raster_dataset_name_with_extension="depth_buildings_raster",
                                            pixel_type="1_BIT",
                                            cellsize=cell_size,
@@ -942,7 +893,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
         # Set null
         out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
-                               in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
+                               in_false_raster_or_constant="in_memory" + r"/depth_buildings_raster",
                                where_clause="Value = 0")
     else:
         # Set null
@@ -953,7 +904,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
     # Check if the domain was predefined
     if domain != '':
-        out_set_null_clipped = workspace + r"/out_set_null_clipped"
+        out_set_null_clipped = "in_memory" + r"/out_set_null_clipped"
         layers_to_remove.append(out_set_null_clipped)
         # Clip
         arcpy.Clip_management(in_raster=out_set_null,

@@ -3,6 +3,8 @@ import shutil
 from functions import *
 from classes import *
 
+arcpy.AddMessage('Off we go!')
+
 # I have no idea what the code test should look like <lenny face>
 os.mkdir(r"..\temp\test_output")
 workspace = r"C:\Users\PLPD00293\Documents\ArcGIS\Default.gdb"
@@ -60,4 +62,8 @@ in_rasters = [r'..\data.gdb\in_landuse_sweref1800', r'..\data.gdb\in_raster_swer
 mask_and_export(mask, in_rasters, output_folder)
 
 # clean up
+arcpy.AddMessage('One moment, please...')
 shutil.rmtree(r"..\temp\test_output")
+os.remove('log')
+os.remove('.prj')
+arcpy.AddMessage('Ready!')
