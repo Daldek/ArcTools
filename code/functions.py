@@ -439,12 +439,11 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     """
 
     # Variables
-    streams = workspace + r"/streams"
+    streams = workspace + r"/Streams"
     temp_basin = "in_memory" + r"/tempBasin"
     temp_basin2 = "in_memory" + r"/tempBasin2"
     catchment_border = "in_memory" + r"/catchment_border"
     union_basins = "in_memory" + r"/union_basins"
-    # layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
     catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
     output = workspace + r"/Catchments"
     expression = "VALUE > " + str(catchment_area)
@@ -563,8 +562,6 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     arcpy.DeleteField_management(in_table=output,
                                  drop_field="GridID")
     arcpy.AddMessage('Field has been removed.')
-    # for layer in layers_to_remove:
-    #     arcpy.Delete_management(layer)
     arcpy.Delete_management("in_memory")
     arcpy.AddMessage('Temporary files have been removed.')
     return output
@@ -601,15 +598,6 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     field_name = "new_elev"
     model_domain_grid = workspace + r"/model_domain_grid"  # I'd like to keep it in the workspace
 
-    # layers_to_remove = [catchment,
-    #                     catchment_buffer,
-    #                     catchment_simple,
-    #                     rasterized_buildings,
-    #                     rasterized_buildings_calc,
-    #                     dem_buildings,
-    #                     model_domain_grid,
-    #                     catchment_box,
-    #                     rasterized_catchment_box]
     layers_to_remove = [model_domain_grid]
 
     # Catchment

@@ -8,6 +8,7 @@ catchments = arcpy.GetParameterAsText(3)  # Selected catchments. From "catchment
 buildings = arcpy.GetParameterAsText(4)  # Polygon feature class
 buffer_distance = int(arcpy.GetParameterAsText(5))  # Meters
 output_folder = arcpy.GetParameterAsText(6)  # Where the ASCII files will be saved
+simplify_catchment = arcpy.GetParameter(7)  # Condition to determine the simplification of the catchment area
 
 # Env settings
 arcpy.env.workspace = workspace
@@ -18,5 +19,5 @@ arcpy.env.cellSize = input_raster
 arcpy.env.nodata = "NONE"
 
 domain_creation(workspace, input_raster, rise, catchments,
-                buildings, buffer_distance, output_folder)
+                buildings, buffer_distance, output_folder, simplify_catchment)
 arcpy.AddMessage('Success!')
