@@ -1,7 +1,7 @@
 # ArcTools
 
 Python tools for manipulating a Digital Elevation Model, removing obstacles (polyline based) 
-and creating an ASCII GRID files (elevation model, land use and roughness).
+and creating an ASCII GRID file (elevation model).
 
 **Features**
 - Remove culverts, bridges, etc. to allow water to flow under/through constructions
@@ -12,7 +12,7 @@ and creating an ASCII GRID files (elevation model, land use and roughness).
 
 ## Install
 **Requirements**
-- ArcMap 10.7 or later
+- ArcMap 10.8
 - Git (not required, but will make things easier). [Wikipedia](https://en.wikipedia.org/wiki/Git)
 
 **Installation**
@@ -38,6 +38,11 @@ this code:
 $ git pull https://github.com/Daldek/ArcTools.git
 ```
 
+To pull from e.g. the develop branch, use the following code:
+```shell
+$ git pull https://github.com/Daldek/ArcTools.git develop
+```
+
 If you have made changes to the code yourself and want to discard them (permanently):
 ```shell
 $ git reset --hard
@@ -46,7 +51,7 @@ $ git reset --hard
 > In ArcMap:
 - Make sure the repository on your computer is connected to your ArcMap 
 (Catalog -> Connect To Folder)
-- Create a Geodatabase where you want to keep your results
+- Create a Geodatabase where you want to keep your results. Remember to avoind special characters in the path.
 - Create a Toolbox in a folder or in the Geodatabase (you can use existing ones if you have)
 - Right click on the Toolbox -> "Add" -> "Script..."
 - Choose "Store relative search path names (instead of absolute paths)"
@@ -75,10 +80,11 @@ $ git reset --hard
     - DEM ("filled_sinks" from "Raster Manipulation" script)
     - Rise (building heights, recommended value = 2) [m]
     - Selected catchments (Select catchment from "Catchment_delineation" script (feature class)
-    and save as a new feature class)
+    and save as a new feature class. You can also add a feature class from another source)
     - Buildings (feature class)
-    - buffer distance (selected catchment will be enlarged by this width) [m]
+    - buffer distance (selected catchment will be enlarged by this width. For the value 0, simplification of the catchment polygon will be automatically ommited) [m]
     - Output folder
+    - Catchment simlification (Parameter indicates whether the output polygon will be simplifield)
 
 - **MIKE2xyz**
     - Workspace -> place where user wants to save .xyz file
