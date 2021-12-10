@@ -5,6 +5,12 @@ from classes import *
 
 arcpy.AddMessage('Off we go!')
 
+# Where am I?
+current_dir_path = os.getcwd()
+current_dir_name = os.path.basename(current_dir_path)
+if current_dir_name == "ArcTools":
+    os.chdir(current_dir_path + r"\code")
+
 # I have no idea what the code test should look like <lenny face>
 try:
     shutil.rmtree(r"..\temp\test_output")

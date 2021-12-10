@@ -1,4 +1,5 @@
 .gitattributes
+*.pyc
 **/.idea/
 **/.git/
 /temp/
