@@ -57,34 +57,37 @@ agree_dem = workspace + r"\AgreeDEM"
 filled_channels = workspace + r"\Filled_channels"
 arcpy.AddMessage("Step 2 - complete!\n")
 
-# 3 - catchment processing
+# 3 - catchment processing (without additional rasters)
 catchment_delineation(workspace, agree_dem, catchment_area)
 # catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
 arcpy.AddMessage("Step 3 - complete!\n")
 
-# 4 - domain creation (with catchment simplification)
+# 4 - catchment processing (with additional rasters)
+catchment_delineation(workspace, agree_dem, catchment_area, True, True, True)
+# catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
+arcpy.AddMessage("Step 4 - complete!\n")
+
+# 5 - domain creation (with catchment simplification)
 domain_creation(workspace, in_dem, rise, in_selected_catchment,
                 in_buildings, buffer_distance, output_folder, True)
-arcpy.AddMessage("Step 4 - complete!\n")
-arcpy.AddMessage('Success!')
+arcpy.AddMessage("Step 5 - complete!\n")
 
-# 5 - domain creation (without catchment simplification)
+# 6 - domain creation (without catchment simplification)
 domain_creation(workspace, in_dem, rise, in_selected_catchment,
                 in_buildings, buffer_distance, output_folder, False)
-arcpy.AddMessage("Step 5 - complete!\n")
-arcpy.AddMessage('Success!')
+arcpy.AddMessage("Step 6 - complete!\n")
 
 buffer_distance = 0
-# 6 - domain creation (with catchment simplification, but without buffer)
+# 7 - domain creation (with catchment simplification, but without buffer)
 domain_creation(workspace, in_dem, rise, in_selected_catchment,
                 in_buildings, buffer_distance, output_folder, True)
-arcpy.AddMessage("Step 6 - complete!\n")
-arcpy.AddMessage('Success!')
+arcpy.AddMessage("Step 7 - complete!\n")
 
-# 7 - export to ascii and validation
+# 8 - export to ascii and validation
 mask = r"..\temp\test_output\bathymetry.asc"
 in_rasters = [r'..\data.gdb\in_landuse_sweref1800', r'..\data.gdb\in_raster_sweref1800']
 mask_and_export(mask, in_rasters, output_folder)
+arcpy.AddMessage("Step 8 - complete!\n")
 
 # clean up
 arcpy.AddMessage('One moment, please...')

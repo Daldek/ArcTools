@@ -423,7 +423,7 @@ def raster_manipulation(workspace,
     return 1
 
 
-def catchment_delineation(workspace, input_raster, catchment_area):
+def catchment_delineation(workspace, input_raster, catchment_area, keep_flow_dir = False, keep_flow_acc = False, calc_slopes = False):
 
     """
     This is the second major function. Its purpose is to delineate catchment boundaries.
@@ -434,12 +434,17 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     :param workspace: a geodatabase in which results will be stored
     :param input_raster: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
     :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]
+    :param keep_flow_dir: allows the flow direction raster to be saved in the workspace
+    :param keep_flow_acc: allows the flow accumulation raster to be saved
+    :param calc_slopes: allows to calculate and save the slope raster
     :return: confirmation of successful function execution. Additionally, a feature class (polyline) representing
     the river network is created, as well as a feature class (polygon) containing all generated catchments
     """
 
     # Variables
     streams = workspace + r"/Streams"
+    stream_ln = "in_memory" + r"/stream_ln"
+    stream_order = "in_memory" + r"/stream_order"
     temp_basin = "in_memory" + r"/tempBasin"
     temp_basin2 = "in_memory" + r"/tempBasin2"
     catchment_border = "in_memory" + r"/catchment_border"
@@ -453,11 +458,24 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     flow_dir = FlowDirection(in_surface_raster=input_raster,
                              force_flow="NORMAL",)
     arcpy.AddMessage('Flow direction raster has been built.')
+    if keep_flow_dir:
+        flow_dir.save(workspace + r"/Flow_dir")
+        arcpy.AddMessage('Flow direction raster has been saved.')
 
     # Flow accumulation
     flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir,
                                 data_type="INTEGER")
     arcpy.AddMessage('Flow accumulation raster has been built.')
+    if keep_flow_acc:
+        flow_acc.save(workspace + r"/Flow_acc")
+        arcpy.AddMessage('Flow accumulation raster has been saved.')
+    
+    # Slopes
+    if calc_slopes:
+        slope = Slope(in_raster=input_raster, 
+                    output_measurement='DEGREE')
+        slope.save(workspace + r"/Slope")
+        arcpy.AddMessage('Slope raster hass been built and saved.')
 
     # Con
     stream = Con(in_conditional_raster=flow_acc,
@@ -471,12 +489,70 @@ def catchment_delineation(workspace, input_raster, catchment_area):
                         in_flow_direction_raster=flow_dir)
     arcpy.AddMessage('Stream links have been found.')
 
+    # Stream Order
+    str_order = StreamOrder(in_stream_raster=stream,
+                            in_flow_direction_raster=flow_dir,
+                            order_method='STRAHLER')
+    arcpy.AddMessage('Stream order has been calculated.')
+
     # Stream to feature
     StreamToFeature(in_stream_raster=str_ln,
                     in_flow_direction_raster=flow_dir,
-                    out_polyline_features=streams,
-                    simplify="NO_SIMPLIFY")
+                    out_polyline_features=stream_ln,
+                    simplify="SIMPLIFY")
     arcpy.AddMessage('Streams have been converted to features.')
+    
+    # Stream order to feature
+    StreamToFeature(in_stream_raster=str_order,
+                    in_flow_direction_raster=flow_dir,
+                    out_polyline_features=stream_order,
+                    simplify="SIMPLIFY")
+    arcpy.AddMessage('Streams have been converted to features - order.')
+
+    # Add field
+    arcpy.AddField_management(in_table=stream_order,
+                              field_name="Order",
+                              field_type="Long",
+                              field_alias="Order",
+                              field_is_nullable="NULLABLE",
+                              field_is_required="NON_REQUIRED")
+    arcpy.AddMessage('New filed has been created - order.')
+
+    '''
+    For some reason name of the newly created field is not 'Order', but 'Order_'. I don't get it,
+    but it's fine as long as it works fine. I just want to leve this comment here to explain
+    this potential misunderstandig
+    '''
+    # Calculate field
+    arcpy.CalculateField_management(in_table=stream_order,
+                                    field="Order_",
+                                    expression="!grid_code!",
+                                    expression_type="PYTHON_9.3")
+    arcpy.AddMessage('Values have been calculated - order.')
+
+    # Creating a new field map
+    fieldmappings = arcpy.FieldMappings()
+    fieldmappings.addTable(stream_order)
+    fieldmappings.addTable(stream_ln)
+    fields_to_keep = ['grid_code', 'from_node', 'to_node', 'Order_']
+    for field in fieldmappings.fields:
+        if field.name not in fields_to_keep:
+            fieldmappings.removeFieldMap(fieldmappings.findFieldMapIndex(field.name))
+
+    # Spatial Join
+    arcpy.SpatialJoin_analysis(target_features=stream_ln,
+                               join_features=stream_order,
+                               out_feature_class=streams,
+                               join_operation='JOIN_ONE_TO_ONE',
+                               join_type='KEEP_ALL',
+                               field_mapping=fieldmappings,
+                               match_option='ARE_IDENTICAL_TO')
+    arcpy.AddMessage('Polylines have been joined')
+    
+    # Delete fields
+    arcpy.DeleteField_management(in_table=streams,
+                                 drop_field=['Join_Count', 'TARGET_FID'])
+    arcpy.AddMessage('Fields have been removed')
 
     # Watershed
     cat = Watershed(in_flow_direction_raster=flow_dir,
