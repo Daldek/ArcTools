@@ -423,7 +423,9 @@ def raster_manipulation(workspace,
     return 1
 
 
-def catchment_delineation(workspace, input_raster, catchment_area, keep_flow_dir = False, keep_flow_acc = False, calc_slopes = False):
+def catchment_delineation(workspace, input_raster, catchment_area, 
+                          keep_flow_dir = False, keep_flow_acc = False, 
+                          calc_flow_ln = False, calc_slopes = False):
 
     """
     This is the second major function. Its purpose is to delineate catchment boundaries.
@@ -470,6 +472,13 @@ def catchment_delineation(workspace, input_raster, catchment_area, keep_flow_dir
         flow_acc.save(workspace + r"/Flow_acc")
         arcpy.AddMessage('Flow accumulation raster has been saved.')
     
+    # Flow length
+    if calc_flow_ln:
+        flow_ln = FlowLength(in_flow_direction_raster=flow_dir,
+                             direction_measurement='UPSTREAM')
+        flow_ln.save(workspace + r"/Flow_ln")
+        arcpy.AddMessage('Flown length raster hass been built and saved.')
+
     # Slopes
     if calc_slopes:
         slope = Slope(in_raster=input_raster, 

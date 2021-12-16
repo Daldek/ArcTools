@@ -63,7 +63,7 @@ catchment_delineation(workspace, agree_dem, catchment_area)
 arcpy.AddMessage("Step 3 - complete!\n")
 
 # 4 - catchment processing (with additional rasters)
-catchment_delineation(workspace, agree_dem, catchment_area, True, True, True)
+catchment_delineation(workspace, agree_dem, catchment_area, True, True, True, True)
 # catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
 arcpy.AddMessage("Step 4 - complete!\n")
 
