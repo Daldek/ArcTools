@@ -1057,7 +1057,7 @@ def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
     # Let's start with green areas
     out_green_areas_lyr = "S_green_areas_layer"
     out_green_areas_fc = workspace + r"\S_green_areas"
-    sql_expression = "DETALJTYP = 'BEBHÖG' OR DETALJTYP = 'BEBLÅG' OR DETALJTYP = 'ODLÅKER' OR DETALJTYP = 'SKOGBARR' OR DETALJTYP = 'SKOGLÖV' OR DETALJTYP = 'ÖPMARK'"
+    sql_expression = "DETALJTYP = 'BEBHÖG' OR DETALJTYP = 'BEBLÅG' OR DETALJTYP = 'ODLFRUKT' OR DETALJTYP = 'ODLÅKER' OR DETALJTYP = 'SKOGBARR' OR DETALJTYP = 'SKOGLÖV' OR DETALJTYP = 'ÖPMARK'"
     arcpy.AddMessage(sql_expression)
     arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
                                       out_layer=out_green_areas_lyr)
