@@ -31,7 +31,7 @@ in_culverts = r"..\data.gdb\In_culverts_sweref1800"
 in_buildings = r"..\data.gdb\In_buildings_sweref1800"
 in_lake = r""
 in_selected_catchment = r"..\data.gdb\in_selected_catchment"
-in_fastighetskartan_markytor = r"..\data.gdb\in_fastighetskartan_markytor"
+in_fastighetskartan_markytor = r"..\data.gdb\in_fastighetskartan_markytor_sweref99tm"
 
 # variables
 maximum_distance = 4
