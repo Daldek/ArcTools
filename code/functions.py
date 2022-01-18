@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import arcpy
 from arcpy.sa import *  # spatial analyst module
@@ -127,7 +129,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe a list instead of string?
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
                                        output_location=workspace,
-                                       raster_dataset_name_with_extension="Filled_channels",
+                                       raster_dataset_name_with_extension="Script_filled_channels",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
                                        number_of_bands=1,
@@ -138,7 +140,7 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     layers_to_remove = [ditch_buffer, ditch_raster, ditch_fill]
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
-    output_raster = workspace + r"/Filled_channels"
+    output_raster = workspace + r"/Script_filled_channels"
     arcpy.AddMessage('Sinks have been filled.')
     return output_raster
 
@@ -233,9 +235,9 @@ def raster_manipulation(workspace,
     :param sharp_drop: additional dredging depth to make sure the obstruction is removed [m]
     :param endorheic_water_bodies: drainless areas that we want to take into account
     :param creating_agreedem: variable that determines whether an "AgreeDEM" raster is created.
-    "AgreeDEM" is an input raster to the "catchment_delineation" function
-    :return: confirmation of successful function execution. In addition, two rasters "AgreeDEM" and "Filled_channels"
-    are created
+    "Script_agreeDEM" is an input raster to the "catchment_delineation" function
+    :return: confirmation of successful function execution. In addition, two rasters "Script_agreeDEM"
+    and "Script_filled_channels" are created
     """
 
     # Variables
@@ -389,7 +391,7 @@ def raster_manipulation(workspace,
                     "",
                     "")
     agree_dem = Raster(workspace + r"/agreeDEM_times") / 1000
-    agree_dem.save(workspace + r"/AgreeDEM")
+    agree_dem.save(workspace + r"/Script_agreeDEM")
     arcpy.AddMessage('AgreeDEM. Done.')
 
     arcpy.AddMessage('Initialization of the "fill_channel_sinks" function.')
@@ -407,13 +409,13 @@ def raster_manipulation(workspace,
                                                       agree_dem,
                                                       cell_size,
                                                       endorheic_water_bodies)
-            layers_to_remove.append(workspace + r"/dem_lakes")
+            layers_to_remove.append(workspace + r"/Script_dem_lakes")
 
         # Fill sinks
         out_fill = Fill(in_surface_raster=agree_dem)
-        out_fill.save(workspace + r"/AgreeDEM")
+        out_fill.save(workspace + r"/Script_agreeDEM")
     else:
-        layers_to_remove.append(workspace + r"/AgreeDEM")
+        layers_to_remove.append(workspace + r"/Script_agreeDEM")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -423,9 +425,7 @@ def raster_manipulation(workspace,
     return 1
 
 
-def catchment_delineation(workspace, input_raster, catchment_area, 
-                          keep_flow_dir = False, keep_flow_acc = False, 
-                          calc_flow_ln = False, calc_slopes = False):
+def catchment_delineation(workspace, input_dem, input_correct_dem, catchment_area):
 
     """
     This is the second major function. Its purpose is to delineate catchment boundaries.
@@ -434,57 +434,58 @@ def catchment_delineation(workspace, input_raster, catchment_area,
     where two watercourses join, a catchment is created.
     Read more: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/identifying-stream-networks.htm
     :param workspace: a geodatabase in which results will be stored
-    :param input_raster: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
+    :param input_dem: original elevation model before modification (see raster_manipulation function)
+    :param input_correct_dem: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
     :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]
-    :param keep_flow_dir: allows the flow direction raster to be saved in the workspace
-    :param keep_flow_acc: allows the flow accumulation raster to be saved
-    :param calc_slopes: allows to calculate and save the slope raster
     :return: confirmation of successful function execution. Additionally, a feature class (polyline) representing
     the river network is created, as well as a feature class (polygon) containing all generated catchments
     """
 
     # Variables
-    streams = workspace + r"/Streams"
+    streams = workspace + r"/Script_streams"
     stream_ln = "in_memory" + r"/stream_ln"
     stream_order = "in_memory" + r"/stream_order"
     temp_basin = "in_memory" + r"/tempBasin"
     temp_basin2 = "in_memory" + r"/tempBasin2"
     catchment_border = "in_memory" + r"/catchment_border"
     union_basins = "in_memory" + r"/union_basins"
-    catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
-    output = workspace + r"/Catchments"
+    catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_dem))
+    output = workspace + r"/Script_catchments"
     expression = "VALUE > " + str(catchment_area)
     arcpy.AddMessage('Expression "' + str(expression) + '"')
 
-    # Flow direction
-    flow_dir = FlowDirection(in_surface_raster=input_raster,
+    # Flow direction - correct surface
+    flow_dir = FlowDirection(in_surface_raster=input_dem,
                              force_flow="NORMAL",)
     arcpy.AddMessage('Flow direction raster has been built.')
-    if keep_flow_dir:
-        flow_dir.save(workspace + r"/Flow_dir")
-        arcpy.AddMessage('Flow direction raster has been saved.')
+
+    # Sink
+    sink = Sink(in_flow_direction_raster=flow_dir)
+    arcpy.AddMessage('Sink raster has been built.')
+    sink.save(workspace + r"/Script_sink")
+
+    # Flow direction - correct surface
+    flow_dir_correct = FlowDirection(in_surface_raster=input_correct_dem,
+                                     force_flow="NORMAL",)
+    arcpy.AddMessage('Flow direction (correct surface) raster has been built.')
+    flow_dir_correct.save(workspace + r"/Script_flow_dir")
 
     # Flow accumulation
-    flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir,
+    flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir_correct,
                                 data_type="INTEGER")
     arcpy.AddMessage('Flow accumulation raster has been built.')
-    if keep_flow_acc:
-        flow_acc.save(workspace + r"/Flow_acc")
-        arcpy.AddMessage('Flow accumulation raster has been saved.')
+    flow_acc.save(workspace + r"/Script_flow_acc")
     
     # Flow length
-    if calc_flow_ln:
-        flow_ln = FlowLength(in_flow_direction_raster=flow_dir,
-                             direction_measurement='UPSTREAM')
-        flow_ln.save(workspace + r"/Flow_ln")
-        arcpy.AddMessage('Flown length raster hass been built and saved.')
+    flow_ln = FlowLength(in_flow_direction_raster=flow_dir_correct,
+                         direction_measurement='UPSTREAM')
+    flow_ln.save(workspace + r"/Script_flow_ln")
 
     # Slopes
-    if calc_slopes:
-        slope = Slope(in_raster=input_raster, 
-                    output_measurement='DEGREE')
-        slope.save(workspace + r"/Slope")
-        arcpy.AddMessage('Slope raster hass been built and saved.')
+    slope = Slope(in_raster=input_correct_dem, 
+                  output_measurement='DEGREE')
+    slope.save(workspace + r"/Script_slope")
+    arcpy.AddMessage('Slope raster hass been built.')
 
     # Con
     stream = Con(in_conditional_raster=flow_acc,
@@ -495,25 +496,25 @@ def catchment_delineation(workspace, input_raster, catchment_area,
 
     # Stream link
     str_ln = StreamLink(in_stream_raster=stream,
-                        in_flow_direction_raster=flow_dir)
+                        in_flow_direction_raster=flow_dir_correct)
     arcpy.AddMessage('Stream links have been found.')
 
     # Stream Order
     str_order = StreamOrder(in_stream_raster=stream,
-                            in_flow_direction_raster=flow_dir,
+                            in_flow_direction_raster=flow_dir_correct,
                             order_method='STRAHLER')
     arcpy.AddMessage('Stream order has been calculated.')
 
     # Stream to feature
     StreamToFeature(in_stream_raster=str_ln,
-                    in_flow_direction_raster=flow_dir,
+                    in_flow_direction_raster=flow_dir_correct,
                     out_polyline_features=stream_ln,
                     simplify="SIMPLIFY")
     arcpy.AddMessage('Streams have been converted to features.')
     
     # Stream order to feature
     StreamToFeature(in_stream_raster=str_order,
-                    in_flow_direction_raster=flow_dir,
+                    in_flow_direction_raster=flow_dir_correct,
                     out_polyline_features=stream_order,
                     simplify="SIMPLIFY")
     arcpy.AddMessage('Streams have been converted to features - order.')
@@ -564,7 +565,7 @@ def catchment_delineation(workspace, input_raster, catchment_area,
     arcpy.AddMessage('Fields have been removed')
 
     # Watershed
-    cat = Watershed(in_flow_direction_raster=flow_dir,
+    cat = Watershed(in_flow_direction_raster=flow_dir_correct,
                     in_pour_point_data=str_ln,
                     pour_point_field="VALUE")
     arcpy.AddMessage('The watershed raster has been built.')
@@ -1050,3 +1051,48 @@ def mask_and_export(mask, in_rasters, output_folder):
 
     arcpy.AddMessage('Progress: ' + str(a) + r'/' + str(b))
     arcpy.AddMessage("Raster files have been exported.")
+
+
+def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
+    # Let's start with green areas
+    out_green_areas_lyr = "S_green_areas_layer"
+    out_green_areas_fc = workspace + r"\S_green_areas"
+    sql_expression = "DETALJTYP = 'BEBHÖG' OR DETALJTYP = 'BEBLÅG' OR DETALJTYP = 'ODLÅKER' OR DETALJTYP = 'SKOGBARR' OR DETALJTYP = 'SKOGLÖV' OR DETALJTYP = 'ÖPMARK'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_green_areas_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_green_areas_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_green_areas_lyr,
+                                  out_feature_class=out_green_areas_fc)
+    arcpy.AddMessage("Green areas have been exported")
+
+    # Hard areas
+    out_hard_areas_lyr = "S_hard_areas_layer"
+    out_hard_areas_fc = workspace + r"\S_hard_areas"
+    sql_expression = "DETALJTYP = 'ÖPTORG' OR DETALJTYP = 'BEBIND' OR DETALJTYP = 'BEBSLUT'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_hard_areas_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_hard_areas_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_hard_areas_lyr,
+                                  out_feature_class=out_hard_areas_fc)
+    arcpy.AddMessage("Hard areas have been exported")
+
+    # Last but not least - water
+    out_water_lyr = "S_water_layer"
+    out_water_fc = workspace + r"\S_water"
+    sql_expression = "DETALJTYP = 'VATTEN'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_water_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_water_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_water_lyr,
+                                  out_feature_class=out_water_fc)
+    arcpy.AddMessage("Water bodies have been exported")
+    return 1

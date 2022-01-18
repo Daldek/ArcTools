@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import shutil
 from functions import *
@@ -29,6 +31,7 @@ in_culverts = r"..\data.gdb\In_culverts_sweref1800"
 in_buildings = r"..\data.gdb\In_buildings_sweref1800"
 in_lake = r""
 in_selected_catchment = r"..\data.gdb\in_selected_catchment"
+in_fastighetskartan_markytor = r"..\data.gdb\in_fastighetskartan_markytor"
 
 # variables
 maximum_distance = 4
@@ -53,40 +56,39 @@ arcpy.AddMessage("Step 1 - complete!\n")
 
 # 2 - raster manipulation (with AgreeDEM)
 raster_manipulation(workspace, in_dem, in_culverts, maximum_distance, smooth_drop, sharp_drop, in_lake, True)
-agree_dem = workspace + r"\AgreeDEM"
-filled_channels = workspace + r"\Filled_channels"
+agree_dem = workspace + r"\Script_agreeDEM"
+filled_channels = workspace + r"\Script_filled_channels"
 arcpy.AddMessage("Step 2 - complete!\n")
 
 # 3 - catchment processing (without additional rasters)
-catchment_delineation(workspace, agree_dem, catchment_area)
-# catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
+catchment_delineation(workspace, in_dem, agree_dem, catchment_area)
+catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
 arcpy.AddMessage("Step 3 - complete!\n")
 
-# 4 - catchment processing (with additional rasters)
-catchment_delineation(workspace, agree_dem, catchment_area, True, True, True, True)
-# catchments = workspace + r"\catchments"  # I do not want to use all catchments anymore
+# 4 - domain creation (with catchment simplification)
+domain_creation(workspace, in_dem, rise, in_selected_catchment,
+                in_buildings, buffer_distance, output_folder, True)
 arcpy.AddMessage("Step 4 - complete!\n")
 
-# 5 - domain creation (with catchment simplification)
-domain_creation(workspace, in_dem, rise, in_selected_catchment,
-                in_buildings, buffer_distance, output_folder, True)
-arcpy.AddMessage("Step 5 - complete!\n")
-
-# 6 - domain creation (without catchment simplification)
+# 5 - domain creation (without catchment simplification)
 domain_creation(workspace, in_dem, rise, in_selected_catchment,
                 in_buildings, buffer_distance, output_folder, False)
-arcpy.AddMessage("Step 6 - complete!\n")
+arcpy.AddMessage("Step 5 - complete!\n")
 
 buffer_distance = 0
-# 7 - domain creation (with catchment simplification, but without buffer)
+# 6 - domain creation (with catchment simplification, but without buffer)
 domain_creation(workspace, in_dem, rise, in_selected_catchment,
                 in_buildings, buffer_distance, output_folder, True)
-arcpy.AddMessage("Step 7 - complete!\n")
+arcpy.AddMessage("Step 6 - complete!\n")
 
-# 8 - export to ascii and validation
+# 7 - export to ascii and validation
 mask = r"..\temp\test_output\bathymetry.asc"
 in_rasters = [r'..\data.gdb\in_landuse_sweref1800', r'..\data.gdb\in_raster_sweref1800']
 mask_and_export(mask, in_rasters, output_folder)
+arcpy.AddMessage("Step 7 - complete!\n")
+
+# 8 - Fastighetskartan. Simplify and export
+fastighetskartan_markytor_simplifed(workspace, in_fastighetskartan_markytor)
 arcpy.AddMessage("Step 8 - complete!\n")
 
 # clean up
