@@ -1,0 +1,21 @@
+# -*- coding: utf-8 -*-
+
+import os
+import shutil
+from functions import *
+from classes import *
+
+in_raster = r"C:\\Users\\plpd00293\\OneDrive - WSP O365\Dokumenty\\Automation\\ArcTools\\data.gdb\\in_depth_sweref99tm"
+in_buildings = r"C:\\Users\\plpd00293\\OneDrive - WSP O365\Dokumenty\\Automation\\ArcTools\\data.gdb\\in_buildings_sweref99tm"
+
+current_user = os.getenv('username')
+workspace = "C:/Users/" + current_user + "/Documents/ArcGIS/Default.gdb"
+
+# Env settings
+arcpy.env.workspace = workspace
+arcpy.env.scratchWorkspace = workspace
+arcpy.env.overwriteOutput = True
+
+arcpy.AddMessage('Ready to go!')
+
+buildings_at_risk(workspace, [10, 100.0], in_buildings, in_raster)

@@ -442,7 +442,7 @@ def catchment_delineation(workspace, input_dem, input_correct_dem, catchment_are
     """
 
     # Variables
-    streams = workspace + r"/Script_streams"
+    streams = workspace + r"/script_streams"
     stream_ln = "in_memory" + r"/stream_ln"
     stream_order = "in_memory" + r"/stream_order"
     temp_basin = "in_memory" + r"/tempBasin"
@@ -450,7 +450,7 @@ def catchment_delineation(workspace, input_dem, input_correct_dem, catchment_are
     catchment_border = "in_memory" + r"/catchment_border"
     union_basins = "in_memory" + r"/union_basins"
     catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_dem))
-    output = workspace + r"/Script_catchments"
+    output = workspace + r"/script_catchments"
     expression = "VALUE > " + str(catchment_area)
     arcpy.AddMessage('Expression "' + str(expression) + '"')
 
@@ -462,29 +462,30 @@ def catchment_delineation(workspace, input_dem, input_correct_dem, catchment_are
     # Sink
     sink = Sink(in_flow_direction_raster=flow_dir)
     arcpy.AddMessage('Sink raster has been built.')
-    sink.save(workspace + r"/Script_sink")
+    sink.save(workspace + r"/script_sink")
 
     # Flow direction - correct surface
     flow_dir_correct = FlowDirection(in_surface_raster=input_correct_dem,
                                      force_flow="NORMAL",)
     arcpy.AddMessage('Flow direction (correct surface) raster has been built.')
-    flow_dir_correct.save(workspace + r"/Script_flow_dir")
+    flow_dir_correct.save(workspace + r"/script_flow_dir")
 
     # Flow accumulation
     flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir_correct,
                                 data_type="INTEGER")
     arcpy.AddMessage('Flow accumulation raster has been built.')
-    flow_acc.save(workspace + r"/Script_flow_acc")
+    flow_acc.save(workspace + r"/script_flow_acc")
     
     # Flow length
     flow_ln = FlowLength(in_flow_direction_raster=flow_dir_correct,
                          direction_measurement='UPSTREAM')
-    flow_ln.save(workspace + r"/Script_flow_ln")
+    arcpy.AddMessage('Upstream flow lengths have been calculated.')
+    flow_ln.save(workspace + r"/script_flow_ln")
 
     # Slopes
     slope = Slope(in_raster=input_correct_dem, 
                   output_measurement='DEGREE')
-    slope.save(workspace + r"/Script_slope")
+    slope.save(workspace + r"/script_slope")
     arcpy.AddMessage('Slope raster hass been built.')
 
     # Con
@@ -832,7 +833,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
 
     # Model domain to Shapefile
-    arcpy.FeatureClassToShapefile_conversion(Input_Features=model_boundary,
+    arcpy.conversion.FeatureClassToShapefile(Input_Features=model_boundary,
                                              Output_Folder=output_folder)
     arcpy.AddMessage("Model boundary has been exported to Shapefile.")
 
@@ -880,7 +881,7 @@ def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
 
     # Variables
     output_raster_path = workspace_gdb + r"/" + str(output_raster_name)
-    output_las = workspace_folder + r"/LasDataset.lasd"
+    output_las = workspace_folder + r"/las_dataset.lasd"
     class_codes = list(class_codes.split(', '))
 
     # Create LAS dataset
@@ -1055,8 +1056,8 @@ def mask_and_export(mask, in_rasters, output_folder):
 
 def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
     # Let's start with green areas
-    out_green_areas_lyr = "S_green_areas_layer"
-    out_green_areas_fc = workspace + r"\S_green_areas"
+    out_green_areas_lyr = "s_green_areas_layer"
+    out_green_areas_fc = workspace + r"/green_areas"
     sql_expression = "DETALJTYP = 'BEBHÖG' OR DETALJTYP = 'BEBLÅG' OR DETALJTYP = 'ODLFRUKT' OR DETALJTYP = 'ODLÅKER' OR DETALJTYP = 'SKOGBARR' OR DETALJTYP = 'SKOGLÖV' OR DETALJTYP = 'ÖPMARK'"
     arcpy.AddMessage(sql_expression)
     arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
@@ -1070,7 +1071,7 @@ def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
 
     # Hard areas
     out_hard_areas_lyr = "S_hard_areas_layer"
-    out_hard_areas_fc = workspace + r"\S_hard_areas"
+    out_hard_areas_fc = workspace + r"/hard_areas"
     sql_expression = "DETALJTYP = 'ÖPTORG' OR DETALJTYP = 'BEBIND' OR DETALJTYP = 'BEBSLUT'"
     arcpy.AddMessage(sql_expression)
     arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
@@ -1084,7 +1085,7 @@ def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
 
     # Last but not least - water
     out_water_lyr = "S_water_layer"
-    out_water_fc = workspace + r"\S_water"
+    out_water_fc = workspace + r"/water"
     sql_expression = "DETALJTYP = 'VATTEN'"
     arcpy.AddMessage(sql_expression)
     arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
@@ -1096,3 +1097,134 @@ def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
                                   out_feature_class=out_water_fc)
     arcpy.AddMessage("Water bodies have been exported")
     return 1
+
+
+def longest_flow_path(workspace, input_flow_dir, input_flow_ln):
+
+    '''
+    Desc will be added later
+    '''
+
+    # Variables
+    longest_flow_path_polyline = workspace + r"/script_longest_flow_path"
+
+    if input_flow_ln == '':
+        # Flow length
+        input_flow_ln = FlowLength(in_flow_direction_raster=input_flow_dir,
+                            direction_measurement='UPSTREAM')
+        arcpy.AddMessage('Upstream flow lengths have been calculated.')
+        input_flow_ln.save(workspace + r"/script_flow_ln_US")
+
+    # Flow length - reverse
+    flow_ln_reverse = FlowLength(in_flow_direction_raster=input_flow_dir,
+                                 direction_measurement='DOWNSTREAM')
+    arcpy.AddMessage('Downstream flow lengths have been calculated.')
+    flow_ln_reverse.save(workspace + r"/script_flow_ln_DS")
+
+    flow_ln_calc = flow_ln_reverse + input_flow_ln
+    arcpy.AddMessage("Sum of upstream and downstream flow lenghts have been calculated.")
+
+    max_ln = arcpy.GetRasterProperties_management(flow_ln_calc, "MAXIMUM")
+    max_ln = str(max_ln)
+    max_ln = max_ln.replace(',', '.')
+    max_ln = int(float(max_ln))
+    expression = "VALUE > " + str(max_ln)
+    arcpy.AddMessage("The farthest raster cell has been found.")
+
+    # Stream link equivalent
+    longest_path = Con(in_conditional_raster=flow_ln_calc, 
+                       in_true_raster_or_constant=1,
+                       in_false_raster_or_constant='',
+                       where_clause=expression)
+    arcpy.AddMessage('Conditional raster (max flow lenght) has been built.')
+
+   # Stream to feature
+    StreamToFeature(in_stream_raster=longest_path,
+                    in_flow_direction_raster=input_flow_dir,
+                    out_polyline_features=longest_flow_path_polyline,
+                    simplify="SIMPLIFY")
+    arcpy.AddMessage('Longest flow path has been converted been converted to a feature.')
+    return 1
+
+
+def jordarstkartan_to_raster(workspace, input_excel_data, jordartskartan):
+    # tool to be converted from Model builder to Python
+    pass
+
+
+def buildings_at_risk(workspace, depths, input_buildings, input_water_depth_raster):
+    '''
+    Desc will be added one day
+    
+    To do: a small buffer around flooded areas + dissolve to make sure that 
+    we're not removig too much (hydraulic connection is important!). Example: Klaralvan
+    '''
+
+    # variables
+    search_dist = 1  # meters by default? Not sure
+    depth_r_cm = 'in_memory' + r'/depth_r_cm'
+    depth_r_threshold = 'in_memory' + r'/depth_r_threshold'
+    depth_v = 'in_memory' + r'/depth_v'
+    depth_layer = r'depth_layer'
+    buildings_layer = r'buildings_layer'
+    raster_name = input_water_depth_raster.split("\\")[-1]
+    arcpy.AddMessage(raster_name)
+
+    # Meters to centimeters
+    calc = Raster(input_water_depth_raster) * 100
+    calc.save(depth_r_cm)
+    arcpy.AddMessage("Depths have been recalculated.")
+
+    # Calculate statisctics
+    arcpy.management.CalculateStatistics(depth_r_cm)
+
+    # itereation through list of water depths
+    for depth in depths:
+        depth = int(depth)
+        where_exp = 'VALUE >' + str(depth)
+
+        # remove cells below current threshold value
+        con_r = Con(depth_r_cm, 1, "", where_exp)
+        con_r.save(depth_r_threshold)
+        arcpy.AddMessage("Cells below current threshold value have been removed.")
+
+        # Raster to polygon
+        arcpy.RasterToPolygon_conversion(in_raster = depth_r_threshold, 
+                                         out_polygon_features = depth_v, 
+                                         simplify = "NO_SIMPLIFY", 
+                                         raster_field = "VALUE")
+        arcpy.AddMessage("Raster has been coverted to polygon.")
+        arcpy.CopyFeatures_management(depth_v, workspace + r'/depth_v')  # what???
+        
+        # Select flooded areas greater than 12 sqm
+        # hehe, I wish I could
+        # depth_layer = arcpy.SelectLayerByAttribute_management(depth_v, "NEW_SELECTION", "Shape_Area >=12")
+        depth_layer = arcpy.SelectLayerByAttribute_management(depth_v)  # must be changed
+        arcpy.AddMessage("Selection is ready.")
+
+        # Select flooded areas greater than 12 sqm
+        arcpy.MakeFeatureLayer_management(input_buildings, buildings_layer)
+        arcpy.AddMessage("Selection #2 (buildings) is ready.")
+
+        flooded_builings_selection = arcpy.management.SelectLayerByLocation(buildings_layer, 
+                                                                            "INTERSECT", 
+                                                                            depth_layer, 
+                                                                            search_dist)
+        arcpy.AddMessage("Flooded building for the current threshold have been found")
+        
+        # Save data
+        currently_flooded = raster_name + r'_' + str(depth).replace('.', '_') + 'cm'  # not so nice, but works
+        print(currently_flooded)
+        arcpy.CopyFeatures_management(flooded_builings_selection, currently_flooded)
+        arcpy.AddMessage('Done!')
+    
+    return 1
+
+
+def roads_at_risk(workspace, depths, input_road_network, input_water_depth_raster):
+    '''
+    tool to be converted from Model builder to Python
+    Look at the cloudburst project we did for the town of Idre in 2022, 
+    the perfect example (in MB?) is there
+    '''
+    pass
