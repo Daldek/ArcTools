@@ -1152,12 +1152,14 @@ def jordarstkartan_to_raster(workspace, input_excel_data, jordartskartan):
     pass
 
 
-def buildings_at_risk(workspace, depths, input_buildings, input_water_depth_raster):
+def infrastructure_at_risk(workspace, depths, input_infrastructure, input_water_depth_raster):
     '''
     Desc will be added one day
     
     To do: a small buffer around flooded areas + dissolve to make sure that 
     we're not removig too much (hydraulic connection is important!). Example: Klaralvan
+
+    Search distance should be an optional parameter
     '''
 
     # variables
@@ -1166,19 +1168,29 @@ def buildings_at_risk(workspace, depths, input_buildings, input_water_depth_rast
     depth_r_threshold = 'in_memory' + r'/depth_r_threshold'
     depth_v = 'in_memory' + r'/depth_v'
     depth_layer = r'depth_layer'
-    buildings_layer = r'buildings_layer'
+    infrastructure_layer = r'infrastructure_layer'
     raster_name = input_water_depth_raster.split("\\")[-1]
-    arcpy.AddMessage(raster_name)
+    # arcpy.AddMessage(raster_name)
+
+    # list's length
+    n = len(depths)
+    i = 0
 
     # Meters to centimeters
     calc = Raster(input_water_depth_raster) * 100
     calc.save(depth_r_cm)
     arcpy.AddMessage("Depths have been recalculated.")
 
+    # Determination of geoetry type (polygon or polyline)
+    desc = arcpy.Describe(input_infrastructure)
+
     # Calculate statisctics
     arcpy.management.CalculateStatistics(depth_r_cm)
 
     # itereation through list of water depths
+    n += 1
+    arcpy.AddMessage(f'Step {1}/{n}')
+
     for depth in depths:
         depth = int(depth)
         where_exp = 'VALUE >' + str(depth)
@@ -1203,28 +1215,19 @@ def buildings_at_risk(workspace, depths, input_buildings, input_water_depth_rast
         arcpy.AddMessage("Selection is ready.")
 
         # Select flooded areas greater than 12 sqm
-        arcpy.MakeFeatureLayer_management(input_buildings, buildings_layer)
+        arcpy.MakeFeatureLayer_management(input_infrastructure, infrastructure_layer)
         arcpy.AddMessage("Selection #2 (buildings) is ready.")
 
-        flooded_builings_selection = arcpy.management.SelectLayerByLocation(buildings_layer, 
-                                                                            "INTERSECT", 
-                                                                            depth_layer, 
-                                                                            search_dist)
-        arcpy.AddMessage("Flooded building for the current threshold have been found")
+        flooded_infrastructure_selection = arcpy.management.SelectLayerByLocation(infrastructure_layer, 
+                                                                                  "INTERSECT", 
+                                                                                  depth_layer, 
+                                                                                  search_dist)
+        arcpy.AddMessage("Flooded infrastructure for the current threshold have been found (if any)")
         
         # Save data
-        currently_flooded = raster_name + r'_' + str(depth).replace('.', '_') + 'cm'  # not so nice, but works
+        currently_flooded = raster_name + r'_' + str(desc.shapeType) + r'_' + str(depth).replace('.', '_') + 'cm'  # not so nice, but works
         print(currently_flooded)
-        arcpy.CopyFeatures_management(flooded_builings_selection, currently_flooded)
+        arcpy.CopyFeatures_management(flooded_infrastructure_selection, currently_flooded)
         arcpy.AddMessage('Done!')
     
     return 1
-
-
-def roads_at_risk(workspace, depths, input_road_network, input_water_depth_raster):
-    '''
-    tool to be converted from Model builder to Python
-    Look at the cloudburst project we did for the town of Idre in 2022, 
-    the perfect example (in MB?) is there
-    '''
-    pass
