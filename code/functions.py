@@ -80,6 +80,27 @@ def feature_extent(input_feature):
     return extent
 
 
+def remove_unnecessary_fields(input_feature):
+    
+    # get a list of fields in the table
+    current_fields = arcpy.ListFields(input_feature)
+    # arcpy.AddMessage(current_fields[0])
+
+    # list of fields to be removed
+    fields_to_be_removed = []
+    
+    # exclude required fileds to prevent errors
+    for field in current_fields:
+        if not field.required:
+            fields_to_be_removed.append(field.name)
+
+    # execute!
+    arcpy.AddMessage(fields_to_be_removed)
+    arcpy.management.DeleteField(input_feature, fields_to_be_removed)
+    arcpy.AddMessage('Done.')
+    return 1
+
+
 def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
 
     """
@@ -1154,12 +1175,16 @@ def jordarstkartan_to_raster(workspace, input_excel_data, jordartskartan):
 
 def infrastructure_at_risk(workspace, depths, input_infrastructure, input_water_depth_raster):
     '''
-    Desc will be added one day
-    
-    To do: a small buffer around flooded areas + dissolve to make sure that 
-    we're not removig too much (hydraulic connection is important!). Example: Klaralvan
+    :param workspace: a geodatabase in which results will be stored
+    :param depths: water depth levels (in centimetres) for which analyses will be carried out
+    :param input_infrastructure: objects such as buildings or roads (polygons and polylines only)
+    :param input_water_depth_raster: raster with modelling results showing water depths (in metres)
 
-    Search distance should be an optional parameter
+    
+    To do:
+    - a small buffer around flooded areas + dissolve to make sure that 
+    we're not removig too much (hydraulic connection is important!). Example: Klaralvan
+    - Search distance should be an optional parameter
     '''
 
     # variables
@@ -1228,6 +1253,9 @@ def infrastructure_at_risk(workspace, depths, input_infrastructure, input_water_
         currently_flooded = raster_name + r'_' + str(desc.shapeType) + r'_' + str(depth).replace('.', '_') + 'cm'  # not so nice, but works
         print(currently_flooded)
         arcpy.CopyFeatures_management(flooded_infrastructure_selection, currently_flooded)
+
+        # Remove fields
+        remove_unnecessary_fields(currently_flooded)
         arcpy.AddMessage('Done!')
     
     return 1
