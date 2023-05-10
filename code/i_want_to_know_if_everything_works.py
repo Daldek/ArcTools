@@ -107,8 +107,8 @@ arcpy.AddMessage("Step 9 - complete!\n")
 fastighetskartan_markytor_simplifed(workspace, in_fastighetskartan_markytor)
 arcpy.AddMessage("Step 10 - complete!\n")
 
-# 11 - buildings at risk
-buildings_at_risk(workspace, [10, 100.0], in_buildings2, in_depth_sweref99tm)
+# 11 - infrastructure at risk
+infrastructure_at_risk(workspace, [10, 100.0], in_buildings2, in_depth_sweref99tm)
 arcpy.AddMessage("Step 11 - complete!\n")
 
 # clean up
