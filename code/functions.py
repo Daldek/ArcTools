@@ -1,20 +1,39 @@
-import re
+# -*- coding: utf-8 -*-
+
+import os
 import arcpy
 from arcpy.sa import *  # spatial analyst module
 # from arcpy.da import *  # data access module
-import arcpy.cartography as CA
+import arcpy.cartography as ca
+from classes import *
 arcpy.CheckOutExtension("Spatial")
 
 
 def square_km_to_cells(area, cell_size):
+
+    """
+    Converting square kilometers to number of cells in a raster
+    :param area: area to be recalculated [sq. km]
+    :param cell_size: raster cell size [sq. m]
+    :return: number of cells with total area corresponding to the input area [-]
+    """
+
     area = float(area)
-    area = (area * 1000000) / (2 * cell_size)
+    area = (area * 1000000) / (cell_size * cell_size)
     area = int(area)
     arcpy.AddMessage('Area unit conversion completed.')
     return area
 
 
 def raster_cell_size(input_raster):
+
+    """
+    Determining of average raster cell size
+    :param input_raster: a raster whose cell size will be returned
+    :return: average cell size in X and Y axis [m]. Example: if the width of the cell in the X axis is 1 and the length
+    in the Y axis is 3, then a value of 2 will be returned
+    """
+
     x_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEX")
     y_direction = arcpy.GetRasterProperties_management(input_raster, "CELLSIZEY")
     x_direction = float(x_direction.getOutput(0))
@@ -27,6 +46,14 @@ def raster_cell_size(input_raster):
 
 
 def raster_extent(input_raster):
+
+    """
+    Determining the maximum range of a raster
+    :param input_raster: a raster whose range will be returned
+    :return: a single string containing the extent of the raster. The order of the boundaries is
+    x_min, y_min, x_max, y_max, separated by spaces
+    """
+
     x_min = arcpy.GetRasterProperties_management(input_raster, "LEFT")
     y_min = arcpy.GetRasterProperties_management(input_raster, "BOTTOM")
     x_max = arcpy.GetRasterProperties_management(input_raster, "RIGHT")
@@ -36,6 +63,14 @@ def raster_extent(input_raster):
 
 
 def feature_extent(input_feature):
+
+    """
+    Determining the maximum range of a feature class
+    :param input_feature: a feature class whose range will be returned
+    :return: a single string containing the extent of the feature class. The order of the boundaries is
+    x_min, y_min, x_max, y_max, separated by spaces
+    """
+
     desc = arcpy.Describe(input_feature)
     x_max = desc.extent.XMax
     y_max = desc.extent.YMax
@@ -45,11 +80,45 @@ def feature_extent(input_feature):
     return extent
 
 
+def remove_unnecessary_fields(input_feature):
+    
+    # get a list of fields in the table
+    current_fields = arcpy.ListFields(input_feature)
+    # arcpy.AddMessage(current_fields[0])
+
+    # list of fields to be removed
+    fields_to_be_removed = []
+    
+    # exclude required fileds to prevent errors
+    for field in current_fields:
+        if not field.required:
+            fields_to_be_removed.append(field.name)
+
+    # execute!
+    arcpy.AddMessage(fields_to_be_removed)
+    arcpy.management.DeleteField(input_feature, fields_to_be_removed)
+    arcpy.AddMessage('Done.')
+    return 1
+
+
 def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
+
+    """
+    Fill artificially deepened channels in such a way that they do not increase channel retention. The newly dredged bed
+    must not be deeper than the nearest adjacent cell
+    :param workspace: a geodatabase in which results will be stored
+    :param input_raster: a input raster on which the filling operation will be performed
+    :param channel_width: channel width. This is the buffer that will be created around a polyline representing
+    the axis of a channel, culvert, or other object
+    :param channel_axis: a feature class representing a channel, culvert or other object
+    :return: raster on which the filling operations were performed. The fill was constrained with a buffer around
+    the polyline so that the artificially deepened channels were filled to the height of the lowest adjacent cell
+    """
+
     # Variables
-    ditch_buffer = workspace + r"/ditch_buffer"
-    ditch_raster = workspace + r"/ditch_raster"
-    ditch_fill = workspace + r"/ditch_fill"
+    ditch_buffer = "in_memory" + r"/ditch_buffer"
+    ditch_raster = "in_memory" + r"/ditch_raster"
+    ditch_fill = "in_memory" + r"/ditch_fill"
 
     arcpy.AddMessage('Initialization of the "raster_cell_size" function.')
     cell_size = raster_cell_size(input_raster)
@@ -78,10 +147,10 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     arcpy.AddMessage('Sinks have been filled.')
 
     # Mosaic to new raster
-    input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe list instead of string?
+    input_str = str(ditch_fill) + "; " + str(input_raster)  # maybe a list instead of string?
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
                                        output_location=workspace,
-                                       raster_dataset_name_with_extension="Filled_channels",
+                                       raster_dataset_name_with_extension="Script_filled_channels",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
                                        number_of_bands=1,
@@ -92,17 +161,28 @@ def fill_channel_sinks(workspace, input_raster, channel_width, channel_axis):
     layers_to_remove = [ditch_buffer, ditch_raster, ditch_fill]
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
-    output_raster = workspace + r"/Filled_channels"
+    output_raster = workspace + r"/Script_filled_channels"
     arcpy.AddMessage('Sinks have been filled.')
     return output_raster
 
 
 def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodies):
+
+    """
+    Function whose purpose is to rasterize polygons and then use them to create NoData areas. The NoData areas
+    created inside the raster, will allow water to flow not only to the outer edges, but also into these areas.
+    :param workspace: a geodatabase in which results will be stored
+    :param input_raster: a raster (digital elevation model) to be modified
+    :param cell_size: input raster cell size
+    :param water_bodies: a feature class (polygons) representing NoData areas that will be created
+    :return: a modified raster
+    """
+
     # Variables
     new_field_name = "LakeElev"
     lakes = workspace + r"/lakes"
-    dem_manip = workspace + r"/dem_manip"
-    dem_lakes = workspace + r"\dem_lakes"
+    dem_manip = "in_memory" + r"/dem_manip"
+    dem_lakes = "in_memory" + r"/dem_lakes"
 
     if cell_size == '#':
         cell_size = raster_cell_size(input_raster)
@@ -134,7 +214,7 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     # Mosaic to new raster
     input_str = str(lakes) + "; " + str(input_raster)
     arcpy.MosaicToNewRaster_management(input_rasters=input_str,
-                                       output_location=workspace,
+                                       output_location="in_memory",
                                        raster_dataset_name_with_extension="dem_manip",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
@@ -144,8 +224,8 @@ def raster_endorheic_modification(workspace, input_raster, cell_size, water_bodi
     arcpy.AddMessage('New raster has been created.')
 
     # Set null
-    out_set_null = SetNull(in_conditional_raster=workspace + r"/dem_manip",
-                           in_false_raster_or_constant=workspace + r"/dem_manip",
+    out_set_null = SetNull(in_conditional_raster="in_memory" + r"/dem_manip",
+                           in_false_raster_or_constant="in_memory" + r"/dem_manip",
                            where_clause="Value = 9999")
     out_set_null.save(dem_lakes)
     arcpy.AddMessage('Null values have been assigned. New raster is ready.')
@@ -163,6 +243,24 @@ def raster_manipulation(workspace,
                         sharp_drop,
                         endorheic_water_bodies,
                         creating_agreedem):
+
+    """
+    The first of the main functions. Its purpose is to remove user-selected obstacles or deepen channels.
+    Removal consists of creating a feature class (polyline) representing the axis in relation to which the dredging
+    operation will be performed.
+    :param workspace: a geodatabase in which results will be stored
+    :param input_raster: a raster (digital elevation model) to be modified
+    :param culverts: a feature class (polyline) representing culverts or other objects
+    :param channel_width: width of the channel (not a bottom, but a "top edge") [m]
+    :param smooth_drop: expected depth of channels [m]
+    :param sharp_drop: additional dredging depth to make sure the obstruction is removed [m]
+    :param endorheic_water_bodies: drainless areas that we want to take into account
+    :param creating_agreedem: variable that determines whether an "AgreeDEM" raster is created.
+    "Script_agreeDEM" is an input raster to the "catchment_delineation" function
+    :return: confirmation of successful function execution. In addition, two rasters "Script_agreeDEM"
+    and "Script_filled_channels" are created
+    """
+
     # Variables
     smooth_drop *= 1000
     sharp_drop *= 1000
@@ -305,14 +403,6 @@ def raster_manipulation(workspace,
     mosaic_list = [smooth_mod_geo, sharp_mod_geo]
     arcpy.Mosaic_management(mosaic_list, buffer_elev_geo,
                             "LAST", "FIRST", "", "", "NONE")
-    """
-    THESE APPROACHES DO NOT WORK - WRONG NUMBER OF BANDS
-
-    arcpy.Mosaic_management(inputs="smooth_mod_geo;sharp_mod_geo",
-                            target=buffer_elev_geo,
-                            mosaic_type="LAST",
-                            colormap="FIRST")
-    """
     arcpy.AddMessage('Mosaic. Done.')
 
     # Con #3
@@ -322,7 +412,7 @@ def raster_manipulation(workspace,
                     "",
                     "")
     agree_dem = Raster(workspace + r"/agreeDEM_times") / 1000
-    agree_dem.save(workspace + r"/AgreeDEM")
+    agree_dem.save(workspace + r"/Script_agreeDEM")
     arcpy.AddMessage('AgreeDEM. Done.')
 
     arcpy.AddMessage('Initialization of the "fill_channel_sinks" function.')
@@ -340,13 +430,13 @@ def raster_manipulation(workspace,
                                                       agree_dem,
                                                       cell_size,
                                                       endorheic_water_bodies)
-            layers_to_remove.append(workspace + r"/dem_lakes")
+            layers_to_remove.append(workspace + r"/Script_dem_lakes")
 
         # Fill sinks
         out_fill = Fill(in_surface_raster=agree_dem)
-        out_fill.save(workspace + r"/AgreeDEM")
+        out_fill.save(workspace + r"/Script_agreeDEM")
     else:
-        layers_to_remove.append(workspace + r"/AgreeDEM")
+        layers_to_remove.append(workspace + r"/Script_agreeDEM")
 
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
@@ -356,28 +446,68 @@ def raster_manipulation(workspace,
     return 1
 
 
-def catchment_delineation(workspace, input_raster, catchment_area):
+def catchment_delineation(workspace, input_dem, input_correct_dem, catchment_area):
+
+    """
+    This is the second major function. Its purpose is to delineate catchment boundaries.
+    A catchment is delineated based on a Flow Accumultaion raster, which is reclassified based on the catchment_area
+    parameter. All cells with a higher value are considered part of the river system. At each nodal point, which is
+    where two watercourses join, a catchment is created.
+    Read more: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/identifying-stream-networks.htm
+    :param workspace: a geodatabase in which results will be stored
+    :param input_dem: original elevation model before modification (see raster_manipulation function)
+    :param input_correct_dem: "AgreeDEM" from function "raster_manipulation" or any other depressionless raster
+    :param catchment_area: minimum catchment area beyond which formation of a new watercourse begins [sq. m]
+    :return: confirmation of successful function execution. Additionally, a feature class (polyline) representing
+    the river network is created, as well as a feature class (polygon) containing all generated catchments
+    """
+
     # Variables
-    streams = workspace + r"/streams"
-    temp_basin = workspace + r"/tempBasin"
-    temp_basin2 = workspace + r"/tempBasin2"
-    catchment_border = workspace + r"/catchment_border"
-    union_basins = workspace + r"/union_basins"
-    layers_to_remove = [temp_basin, temp_basin2, catchment_border, union_basins]
-    catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_raster))
-    output = workspace + r"/Catchments"
+    streams = workspace + r"/script_streams"
+    stream_ln = "in_memory" + r"/stream_ln"
+    stream_order = "in_memory" + r"/stream_order"
+    temp_basin = "in_memory" + r"/tempBasin"
+    temp_basin2 = "in_memory" + r"/tempBasin2"
+    catchment_border = "in_memory" + r"/catchment_border"
+    union_basins = "in_memory" + r"/union_basins"
+    catchment_area = square_km_to_cells(catchment_area, raster_cell_size(input_dem))
+    output = workspace + r"/script_catchments"
     expression = "VALUE > " + str(catchment_area)
     arcpy.AddMessage('Expression "' + str(expression) + '"')
 
-    # Flow direction
-    flow_dir = FlowDirection(in_surface_raster=input_raster,
+    # Flow direction - correct surface
+    flow_dir = FlowDirection(in_surface_raster=input_dem,
                              force_flow="NORMAL",)
     arcpy.AddMessage('Flow direction raster has been built.')
 
+    # Sink
+    sink = Sink(in_flow_direction_raster=flow_dir)
+    arcpy.AddMessage('Sink raster has been built.')
+    sink.save(workspace + r"/script_sink")
+
+    # Flow direction - correct surface
+    flow_dir_correct = FlowDirection(in_surface_raster=input_correct_dem,
+                                     force_flow="NORMAL",)
+    arcpy.AddMessage('Flow direction (correct surface) raster has been built.')
+    flow_dir_correct.save(workspace + r"/script_flow_dir")
+
     # Flow accumulation
-    flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir,
+    flow_acc = FlowAccumulation(in_flow_direction_raster=flow_dir_correct,
                                 data_type="INTEGER")
     arcpy.AddMessage('Flow accumulation raster has been built.')
+    flow_acc.save(workspace + r"/script_flow_acc")
+    
+    # Flow length
+    flow_ln = FlowLength(in_flow_direction_raster=flow_dir_correct,
+                         direction_measurement='UPSTREAM')
+    arcpy.AddMessage('Upstream flow lengths have been calculated.')
+    flow_ln.save(workspace + r"/script_flow_ln")
+
+    # Slopes
+    slope = Slope(in_raster=input_correct_dem, 
+                  output_measurement='DEGREE')
+    slope.save(workspace + r"/script_slope")
+    arcpy.AddMessage('Slope raster hass been built.')
 
     # Con
     stream = Con(in_conditional_raster=flow_acc,
@@ -388,18 +518,76 @@ def catchment_delineation(workspace, input_raster, catchment_area):
 
     # Stream link
     str_ln = StreamLink(in_stream_raster=stream,
-                        in_flow_direction_raster=flow_dir)
+                        in_flow_direction_raster=flow_dir_correct)
     arcpy.AddMessage('Stream links have been found.')
+
+    # Stream Order
+    str_order = StreamOrder(in_stream_raster=stream,
+                            in_flow_direction_raster=flow_dir_correct,
+                            order_method='STRAHLER')
+    arcpy.AddMessage('Stream order has been calculated.')
 
     # Stream to feature
     StreamToFeature(in_stream_raster=str_ln,
-                    in_flow_direction_raster=flow_dir,
-                    out_polyline_features=streams,
-                    simplify="NO_SIMPLIFY")
+                    in_flow_direction_raster=flow_dir_correct,
+                    out_polyline_features=stream_ln,
+                    simplify="SIMPLIFY")
     arcpy.AddMessage('Streams have been converted to features.')
+    
+    # Stream order to feature
+    StreamToFeature(in_stream_raster=str_order,
+                    in_flow_direction_raster=flow_dir_correct,
+                    out_polyline_features=stream_order,
+                    simplify="SIMPLIFY")
+    arcpy.AddMessage('Streams have been converted to features - order.')
+
+    # Add field
+    arcpy.AddField_management(in_table=stream_order,
+                              field_name="Order",
+                              field_type="Long",
+                              field_alias="Order",
+                              field_is_nullable="NULLABLE",
+                              field_is_required="NON_REQUIRED")
+    arcpy.AddMessage('New filed has been created - order.')
+
+    '''
+    For some reason name of the newly created field is not 'Order', but 'Order_'. I don't get it,
+    but it's fine as long as it works fine. I just want to leve this comment here to explain
+    this potential misunderstandig
+    '''
+    # Calculate field
+    arcpy.CalculateField_management(in_table=stream_order,
+                                    field="Order_",
+                                    expression="!grid_code!",
+                                    expression_type="PYTHON_9.3")
+    arcpy.AddMessage('Values have been calculated - order.')
+
+    # Creating a new field map
+    fieldmappings = arcpy.FieldMappings()
+    fieldmappings.addTable(stream_order)
+    fieldmappings.addTable(stream_ln)
+    fields_to_keep = ['grid_code', 'from_node', 'to_node', 'Order_']
+    for field in fieldmappings.fields:
+        if field.name not in fields_to_keep:
+            fieldmappings.removeFieldMap(fieldmappings.findFieldMapIndex(field.name))
+
+    # Spatial Join
+    arcpy.SpatialJoin_analysis(target_features=stream_ln,
+                               join_features=stream_order,
+                               out_feature_class=streams,
+                               join_operation='JOIN_ONE_TO_ONE',
+                               join_type='KEEP_ALL',
+                               field_mapping=fieldmappings,
+                               match_option='ARE_IDENTICAL_TO')
+    arcpy.AddMessage('Polylines have been joined')
+    
+    # Delete fields
+    arcpy.DeleteField_management(in_table=streams,
+                                 drop_field=['Join_Count', 'TARGET_FID'])
+    arcpy.AddMessage('Fields have been removed')
 
     # Watershed
-    cat = Watershed(in_flow_direction_raster=flow_dir,
+    cat = Watershed(in_flow_direction_raster=flow_dir_correct,
                     in_pour_point_data=str_ln,
                     pour_point_field="VALUE")
     arcpy.AddMessage('The watershed raster has been built.')
@@ -482,53 +670,43 @@ def catchment_delineation(workspace, input_raster, catchment_area):
     arcpy.DeleteField_management(in_table=output,
                                  drop_field="GridID")
     arcpy.AddMessage('Field has been removed.')
-    for layer in layers_to_remove:
-        arcpy.Delete_management(layer)
+    arcpy.Delete_management("in_memory")
     arcpy.AddMessage('Temporary files have been removed.')
     return output
 
 
-def domain_creation(workspace, input_raster, rise, catchments, buildings, landuse_raster,
-                    inclination, buffer_distance, output_folder):
+def domain_creation(workspace, input_raster, rise, catchments, buildings, buffer_distance,
+                    output_folder, simplify_catchment):
+
+    """
+    The third major function. Its purpose is to create ASCII files, ready to convert to Dfs2 and create the Mike21 model
+    :param workspace: a geodatabase in which results will be stored
+    :param input_raster: "Filled_channels" from function "raster_manipulation" or any other digital elevation model
+    :param rise: Height of buildings [m]
+    :param catchments: a feature class containing the selected catchments from the "catchment_delineation" function
+    or any other polygon
+    :param buildings: a feature class containing buildings (polygons)
+    :param buffer_distance: size of the buffer by which the terrain model will be extended [m]
+    :param output_folder: the folder where the ASCII files are to be saved
+    :param simplify_catchment: variable specyfing whether the final catchment area will be simplified
+    :return: confirmation of successful function execution. Additionally, 3 ASCII files are created
+    """
+
     # Variables
     # Elevation model
-    catchment = workspace + r"/catchment"
-    catchment_buffer = workspace + r"/catchment_buffer"
-    catchment_simple = workspace + r"/model_domain"  # Renamed
-    catchment_box = workspace + r"/catchment_box"
-    # catchment_wall = workspace + r"/catchment_wall"
-    # rasterized_wall = workspace + r"/rasterized_wall"
-    rasterized_buildings = workspace + r"/rasterized_buildings"
-    rasterized_buildings_calc = workspace + r"/rasterized_buildings_calc"
-    rasterized_catchment_box = workspace + r"/rasterized_catchment_box"
-    # clipped_dem = workspace + r"/clipped_dem"
-    dem_buildings = workspace + r"/dem_buildings"
+    catchment = "in_memory" + r"/catchment"
+    catchment_buffer = "in_memory" + r"/catchment_buffer"
+    catchment_simple = "in_memory" + r"/catchment_simple"
+    model_boundary = "in_memory" + r"/model_boundary"
+    catchment_box = "in_memory" + r"/catchment_box"
+    rasterized_buildings = "in_memory" + r"/rasterized_buildings"
+    rasterized_buildings_calc = "in_memory" + r"/rasterized_buildings_calc"
+    rasterized_catchment_box = "in_memory" + r"/rasterized_catchment_box"
+    dem_buildings = "in_memory" + r"/dem_buildings"
     field_name = "new_elev"
-    model_domain_grid = workspace + r"/model_domain_grid"
+    model_domain_grid = workspace + r"/model_domain_grid"  # I'd like to keep it in the workspace
 
-    # Land use raster
-    land_use_clip = workspace + r"/land_use_clip"
-    landuse_grid = workspace + r"/landuse_grid"
-
-    # Roughness rasters
-    slope_grid = workspace + r"/slope_grid"
-    steep_slopes_grid = workspace + r"/steep_slopes_grid"
-    steep_slopes_grid_clip = workspace + r"/steep_slopes_grid_clip"
-
-    layers_to_remove = [catchment,
-                        catchment_buffer,
-                        catchment_simple,
-                        rasterized_buildings,
-                        rasterized_buildings_calc,
-                        dem_buildings,
-                        model_domain_grid,
-                        land_use_clip,
-                        landuse_grid,
-                        slope_grid,
-                        steep_slopes_grid,
-                        steep_slopes_grid_clip,
-                        catchment_box,
-                        rasterized_catchment_box]
+    layers_to_remove = [model_domain_grid]
 
     # Catchment
     # Add field
@@ -552,24 +730,33 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.AddMessage("New catchment has been created.")
 
     # Graphic buffer
-    arcpy.GraphicBuffer_analysis(in_features=catchment,
-                                 out_feature_class=catchment_buffer,
-                                 buffer_distance_or_field=buffer_distance,
-                                 line_caps="SQUARE",
-                                 line_joins="MITER")
-    arcpy.AddMessage("The catchment area has been extended.")
-
-    # Simplify polygon (catchment)
-    CA.SimplifyPolygon(in_features=catchment_buffer,
-                       out_feature_class=catchment_simple,
-                       algorithm="POINT_REMOVE",
-                       tolerance=(buffer_distance/2),
-                       error_option="NO_CHECK",
-                       collapsed_point_option="NO_KEEP")
-    arcpy.AddMessage("The catchment are has been simplified.")
+    if buffer_distance != 0:
+        arcpy.GraphicBuffer_analysis(in_features=catchment,
+                                     out_feature_class=catchment_buffer,
+                                     buffer_distance_or_field=buffer_distance,
+                                     line_caps="SQUARE",
+                                     line_joins="MITER")
+        arcpy.AddMessage("The catchment area has been extended.")
+        # Simplify polygon (catchment)
+        if simplify_catchment is True:
+            arcpy.AddMessage("Catchment areas will be simplified")
+            ca.SimplifyPolygon(in_features=catchment_buffer,
+                               out_feature_class=catchment_simple,
+                               algorithm="POINT_REMOVE",
+                               tolerance=(abs(buffer_distance) / 2),
+                               error_option="NO_CHECK",
+                               collapsed_point_option="NO_KEEP")
+            arcpy.AddMessage("The catchment are has been simplified.")
+            arcpy.CopyFeatures_management(catchment_simple, model_boundary)
+        else:
+            arcpy.AddMessage("Catchment area will not be simplified")
+            arcpy.CopyFeatures_management(catchment_buffer, model_boundary)
+    else:
+        # catchment_buffer = catchment
+        arcpy.CopyFeatures_management(catchment, model_boundary)
 
     # Minimum bounding geometry
-    arcpy.MinimumBoundingGeometry_management(in_features=catchment_simple,
+    arcpy.MinimumBoundingGeometry_management(in_features=model_boundary,
                                              out_feature_class=catchment_box,
                                              geometry_type="ENVELOPE")
 
@@ -601,7 +788,7 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     # Mosaic to new raster
     dem_buildings_input = [rasterized_buildings_calc, input_raster]
     arcpy.MosaicToNewRaster_management(input_rasters=dem_buildings_input,
-                                       output_location=workspace,
+                                       output_location="in_memory",
                                        raster_dataset_name_with_extension="dem_buildings",
                                        pixel_type="32_BIT_FLOAT",
                                        cellsize=cell_size,
@@ -614,7 +801,8 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     extent = feature_extent(catchment_box)
     arcpy.AddMessage("Box extent: " + str(extent))
 
-    # Env extent - for some unknown reason clipped rasters have same extent as in_dem. I would like them to be smaller
+    # Env extent - for some unknown reason clipped rasters have the same extent as in_dem.
+    # I would like to make them smaller
     desc = arcpy.Describe(catchment_box)
     x_max = desc.extent.XMax
     y_max = desc.extent.YMax
@@ -651,130 +839,41 @@ def domain_creation(workspace, input_raster, rise, catchments, buildings, landus
     arcpy.Clip_management(in_raster=dem_buildings,
                           rectangle=extent,
                           out_raster=model_domain_grid,
-                          in_template_dataset=catchment_simple,
+                          in_template_dataset=model_boundary,
                           nodata_value="999",
                           clipping_geometry="ClippingGeometry",
                           maintain_clipping_extent="NO_MAINTAIN_EXTENT")
     arcpy.AddMessage("DEM has been clipped.")
 
-    # # Buffer
-    # buffer_dist = int(cell_size) * 2
-    # arcpy.Buffer_analysis(in_features=catchment_simple,
-    #                       out_feature_class=catchment_wall,
-    #                       buffer_distance_or_field=buffer_dist,
-    #                       line_side="OUTSIDE_ONLY")
-    # arcpy.AddMessage("Buffer has been created.")
-    #
-    # # Rasterize
-    # arcpy.FeatureToRaster_conversion(in_features=catchment_wall,
-    #                                  field=field_name,
-    #                                  out_raster=rasterized_wall,
-    #                                  cell_size=cell_size)
-    # arcpy.AddMessage("Buffer has been rasterized.")
-    #
-    # # Mosaic to new raster
-    # output_mosaic_list = [clipped_dem, rasterized_wall]
-    # arcpy.MosaicToNewRaster_management(input_rasters=output_mosaic_list,
-    #                                    output_location=workspace,
-    #                                    raster_dataset_name_with_extension="model_domain_grid",
-    #                                    pixel_type="32_BIT_FLOAT",
-    #                                    cellsize=cell_size,
-    #                                    number_of_bands=1,
-    #                                    mosaic_method="FIRST",
-    #                                    mosaic_colormap_mode="FIRST")
-    # arcpy.AddMessage("Domain raster has been built.")
-
-    '''
-    LAND USE GRID
-    '''
-    # Clip
-    arcpy.Clip_management(in_raster=landuse_raster,
-                          rectangle=extent,
-                          out_raster=landuse_grid,
-                          in_template_dataset=catchment_simple,
-                          clipping_geometry="ClippingGeometry",
-                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    arcpy.AddMessage("Land use raster has been clipped.")
-
-    # # Mosaic to new raster
-    # land_use_mosaic_list = [land_use_clip, rasterized_wall]
-    # arcpy.MosaicToNewRaster_management(input_rasters=land_use_mosaic_list,
-    #                                    output_location=workspace,
-    #                                    raster_dataset_name_with_extension="landuse_grid",
-    #                                    pixel_type="16_BIT_UNSIGNED",
-    #                                    cellsize=cell_size,
-    #                                    number_of_bands=1,
-    #                                    mosaic_method="FIRST",
-    #                                    mosaic_colormap_mode="FIRST")
-    # arcpy.AddMessage("Lands use raster has been built.")
-
-    '''
-    ROUGHNESS GRID (LAND USE + STEEP SLOPES)
-    '''
-    # Slope
-    arcpy.Slope_3d(dem_buildings, slope_grid, "DEGREE", 1.0)
-    arcpy.AddMessage("Slopes have been calculated.")
-
-    # Reclassify
-    additional_roughness = Reclassify(slope_grid, "Value", RemapRange([[0, inclination, "NODATA"],
-                                                                       [inclination, 90, 255]]))
-    additional_roughness.save(steep_slopes_grid)
-    arcpy.AddMessage("Raster has been reclassified.")
-
-    # Clip
-    arcpy.Clip_management(in_raster=steep_slopes_grid,
-                          rectangle=extent,
-                          out_raster=steep_slopes_grid_clip,
-                          in_template_dataset=catchment_simple,
-                          clipping_geometry="ClippingGeometry",
-                          maintain_clipping_extent="NO_MAINTAIN_EXTENT")
-    arcpy.AddMessage("Land use raster has been clipped.")
-
-    # Mosaic to new raster
-    roughness_mosaic_list = [steep_slopes_grid_clip, landuse_grid]
-    arcpy.MosaicToNewRaster_management(input_rasters=roughness_mosaic_list,
-                                       output_location=workspace,
-                                       raster_dataset_name_with_extension="roughness_grid",
-                                       pixel_type="8_BIT_UNSIGNED",
-                                       cellsize=cell_size,
-                                       number_of_bands=1,
-                                       mosaic_method="FIRST",
-                                       mosaic_colormap_mode="FIRST")
-    arcpy.AddMessage("Roughness raster has been built.")
-
     '''
     DATA EXPORT
     '''
     # Model domain to ASCII
-    model_domain_output_file = output_folder + str("/model_domain.asc")
+    model_domain_output_file = output_folder + str("/bathymetry.asc")
     arcpy.RasterToASCII_conversion("model_domain_grid", model_domain_output_file)
     arcpy.AddMessage("Model domain raster has been exported to ASCII.")
 
-    # Land use to ASCII
-    land_use_output_file = output_folder + str("/land_use.asc")
-    arcpy.RasterToASCII_conversion("landuse_grid", land_use_output_file)
-    arcpy.AddMessage("Land use raster has been exported to ASCII.")
-
-    # Roughness to ASCII
-    roughness_output_file = output_folder + str("/roughness.asc")
-    arcpy.RasterToASCII_conversion("roughness_grid", roughness_output_file)
-    arcpy.AddMessage("Roughness raster has been exported to ASCII.")
-
     # Model domain to Shapefile
-    domain_output_shapefile = "model_domain.shp"
-    arcpy.FeatureClassToShapefile_conversion(Input_Features=catchment_simple,
+    arcpy.conversion.FeatureClassToShapefile(Input_Features=model_boundary,
                                              Output_Folder=output_folder)
     arcpy.AddMessage("Model boundary has been exported to Shapefile.")
 
-    # ASCII validation
-    columns_rows_check(land_use_output_file, model_domain_output_file, roughness_output_file)
-
     for layer in layers_to_remove:
         arcpy.Delete_management(layer)
+    arcpy.Delete_management("in_memory")
+    arcpy.AddMessage('Temporary files have been removed.')
     return 1
 
 
 def gap_interpolation(radius, input_raster):
+
+    """
+    This function is used to interpolate the NoData cell values inside the raster
+    :param radius: a radius of the area around the cell that will be used to interpolate the values [m]
+    :param input_raster: a raster whose cells we want to interpolate
+    :return: a new raster
+    """
+
     out_con = Con(in_conditional_raster=IsNull(input_raster),
                   in_true_raster_or_constant=FocalStatistics(in_raster=input_raster,
                                                              neighborhood=NbrRectangle(width=radius,
@@ -786,51 +885,24 @@ def gap_interpolation(radius, input_raster):
     return out_con
 
 
-def columns_rows_check(land_use_path, model_domain_path, roughness_path):
-    land_use = open(land_use_path, "r")
-    model_domain = open(model_domain_path, "r")
-    roughness = open(roughness_path, "r")
-    model_domain_columns = model_domain.readline()
-    model_domain_rows = model_domain.readline()
-    model_domain_x = model_domain.readline()
-    model_domain_y = model_domain.readline()
-    land_use_columns = land_use.readline()
-    land_use_rows = land_use.readline()
-    land_use_x = land_use.readline()
-    land_use_y = land_use.readline()
-    roughness_columns = roughness.readline()
-    roughness_rows = roughness.readline()
-    roughness_x = roughness.readline()
-    roughness_y = roughness.readline()
-    if model_domain_columns == land_use_columns and\
-            land_use_columns == roughness_columns:
-        arcpy.AddMessage('Number of columns match')
-    else:
-        arcpy.AddMessage('Wrong number of columns')
-    if model_domain_rows == land_use_rows and\
-            land_use_rows == roughness_rows:
-        arcpy.AddMessage('Number of rows match')
-    else:
-        arcpy.AddMessage('Wrong number of rows')
-    if model_domain_x == land_use_x and\
-            land_use_x == roughness_x:
-        arcpy.AddMessage('X match')
-    else:
-        arcpy.AddMessage('Wrong X')
-    if model_domain_y == land_use_y and\
-            land_use_y == roughness_y:
-        arcpy.AddMessage('Y match')
-    else:
-        arcpy.AddMessage('Wrong Y')
-    return 1
-
-
 def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
             coordinate_system, class_codes, cell_size, output_raster_name):
 
+    """
+    A function that converts las files (folder) to raster
+    :param workspace_gdb: a geodatabase in which results will be stored
+    :param workspace_folder: a folder in which intermediate steps will be stored
+    :param input_las_catalog: a folder which contains input las data (folder)
+    :param coordinate_system: las files coordinate system
+    :param class_codes: desktop.arcgis.com/en/arcmap/latest/manage-data/las-dataset/lidar-point-classification.htm
+    :param cell_size: output raster cell size [m]
+    :param output_raster_name: output raster file name
+    :return: confirmation of successful function execution
+    """
+
     # Variables
     output_raster_path = workspace_gdb + r"/" + str(output_raster_name)
-    output_las = workspace_folder + r"/LasDataset.lasd"
+    output_las = workspace_folder + r"/las_dataset.lasd"
     class_codes = list(class_codes.split(', '))
 
     # Create LAS dataset
@@ -866,6 +938,21 @@ def las2dtm(workspace_gdb, workspace_folder, input_las_catalog,
 
 
 def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, nodata_polygons, domain):
+
+    """
+    Function that removes raster cells with a value lower than the threshold value.
+    Example: If we have a raster with water depth, flow velocity, and elevation, and our parameter is a minimum depth
+    of 10 cm, then we can perform this analysis on the depth raster and use the mask created this way to crop
+    the other rasters
+    :param workspace: a geodatabase in which results will be stored
+    :param cell_size: input raster cell size [m]
+    :param input_raster: a raster to be modified
+    :param threshold_value: cells with a value lower than this will be converted to NoData [-]
+    :param nodata_polygons: additional NoData areas
+    :param domain: a feature class (polygon) limiting the scope of analysis
+    :return: a raster that will be used as a mask to crop other rasters
+    """
+
     # Variables
     layers_to_remove = []
 
@@ -885,8 +972,8 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
     # Check in polygons should be removed from raster
     if nodata_polygons != '':
-        rasterized_polygons = workspace + r"/rasterized_polygons"
-        depth_buildings_raster = workspace + r"/depth_buildings_raster"
+        rasterized_polygons = "in_memory" + r"/rasterized_polygons"
+        depth_buildings_raster = "in_memory" + r"/depth_buildings_raster"
         layers_to_remove.extend([rasterized_polygons, depth_buildings_raster])
         # Polygons to raster
         arcpy.PolygonToRaster_conversion(in_features=nodata_polygons,
@@ -907,7 +994,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
         # Mosaic to new raster
         arcpy.MosaicToNewRaster_management(input_rasters=[reclassified_poly_raster, reclassified_input_raster],
-                                           output_location=workspace,
+                                           output_location="in_memory",
                                            raster_dataset_name_with_extension="depth_buildings_raster",
                                            pixel_type="1_BIT",
                                            cellsize=cell_size,
@@ -918,7 +1005,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
         # Set null
         out_set_null = SetNull(in_conditional_raster=depth_buildings_raster,
-                               in_false_raster_or_constant=workspace + r"/depth_buildings_raster",
+                               in_false_raster_or_constant="in_memory" + r"/depth_buildings_raster",
                                where_clause="Value = 0")
     else:
         # Set null
@@ -929,7 +1016,7 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
 
     # Check if the domain was predefined
     if domain != '':
-        out_set_null_clipped = workspace + r"/out_set_null_clipped"
+        out_set_null_clipped = "in_memory" + r"/out_set_null_clipped"
         layers_to_remove.append(out_set_null_clipped)
         # Clip
         arcpy.Clip_management(in_raster=out_set_null,
@@ -955,28 +1042,220 @@ def mask_below_threshold(workspace, cell_size, input_raster, threshold_value, no
     return created_mask
 
 
-def mike_tools_decoder(input_name, group_number, variable_value):
-    # Klaralven coding. Useless?
-    """
-    #0 Whole expression
-    #1 Name
-    #2 Simulation number
-    #3 Cell size
-    #4 Time step
-    #5 Item
-    #6 Mask
-    """
-    pattern = re.compile(
-        r'([a-zA-Z]+)_sim(\d+)_(\d+)m_ts(\d+)_(Surface_elevation|Current_speed|Total_water_depth)(_mask|)')
-    matches = pattern.finditer(input_name)
-    for match in matches:
-        if group_number == 5 and match.group(group_number) == variable_value:
-            return match.group(0)
-        elif group_number == 5 and match.group(group_number) != variable_value:
-            break
-        elif group_number == 6 and match.group(group_number) == variable_value:
-            return match.group(0)
-        elif group_number == 6 and match.group(group_number) != variable_value:
-            break
+def mask_and_export(mask, in_rasters, output_folder):
+    a = 0  # counter
+    b = len(in_rasters)
+    base_ascii = ''
+    mask_extension = mask.split('.')[-1]
+
+    # If the input mask file is an ASCII file, it will be used as a reference raster for validating new ASCII files
+    if mask_extension == 'asc':
+        base_ascii = AscFile(mask)
+
+    for raster in in_rasters:
+        arcpy.AddMessage('Progress: ' + str(a) + r'/' + str(b))
+        out_ascii_file = os.path.splitext(os.path.basename(raster))[0]  # extracting a raster name
+        out_ascii_file = str(output_folder) + '/' + out_ascii_file + '.asc'
+
+        # Phase 1 - processing
+        masked_raster = ExtractByMask(raster, mask)
+        arcpy.RasterToASCII_conversion(masked_raster, out_ascii_file)
+
+        # Phase 2 - validation
+        if a == 0 and base_ascii == '':
+            base_ascii = AscFile(out_ascii_file)
         else:
-            return match.group(group_number)
+            another_ascii = AscFile(out_ascii_file)
+            if base_ascii.get_properties() != another_ascii.get_properties():
+                arcpy.AddMessage("/nRaster files does not match!/n")
+        arcpy.AddMessage('Ok!')
+        a += 1
+
+    arcpy.AddMessage('Progress: ' + str(a) + r'/' + str(b))
+    arcpy.AddMessage("Raster files have been exported.")
+
+
+def fastighetskartan_markytor_simplifed(workspace, in_feature_class):
+    # Let's start with green areas
+    out_green_areas_lyr = "s_green_areas_layer"
+    out_green_areas_fc = workspace + r"/green_areas"
+    sql_expression = "DETALJTYP = 'BEBHÖG' OR DETALJTYP = 'BEBLÅG' OR DETALJTYP = 'ODLFRUKT' OR DETALJTYP = 'ODLÅKER' OR DETALJTYP = 'SKOGBARR' OR DETALJTYP = 'SKOGLÖV' OR DETALJTYP = 'ÖPMARK'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_green_areas_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_green_areas_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_green_areas_lyr,
+                                  out_feature_class=out_green_areas_fc)
+    arcpy.AddMessage("Green areas have been exported")
+
+    # Hard areas
+    out_hard_areas_lyr = "S_hard_areas_layer"
+    out_hard_areas_fc = workspace + r"/hard_areas"
+    sql_expression = "DETALJTYP = 'ÖPTORG' OR DETALJTYP = 'BEBIND' OR DETALJTYP = 'BEBSLUT'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_hard_areas_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_hard_areas_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_hard_areas_lyr,
+                                  out_feature_class=out_hard_areas_fc)
+    arcpy.AddMessage("Hard areas have been exported")
+
+    # Last but not least - water
+    out_water_lyr = "S_water_layer"
+    out_water_fc = workspace + r"/water"
+    sql_expression = "DETALJTYP = 'VATTEN'"
+    arcpy.AddMessage(sql_expression)
+    arcpy.MakeFeatureLayer_management(in_features=in_feature_class,
+                                      out_layer=out_water_lyr)
+    arcpy.management.SelectLayerByAttribute(in_layer_or_view=out_water_lyr,
+                                            selection_type='NEW_SELECTION',
+                                            where_clause=sql_expression)
+    arcpy.CopyFeatures_management(in_features=out_water_lyr,
+                                  out_feature_class=out_water_fc)
+    arcpy.AddMessage("Water bodies have been exported")
+    return 1
+
+
+def longest_flow_path(workspace, input_flow_dir, input_flow_ln):
+
+    '''
+    Desc will be added later
+    '''
+
+    # Variables
+    longest_flow_path_polyline = workspace + r"/script_longest_flow_path"
+
+    if input_flow_ln == '':
+        # Flow length
+        input_flow_ln = FlowLength(in_flow_direction_raster=input_flow_dir,
+                            direction_measurement='UPSTREAM')
+        arcpy.AddMessage('Upstream flow lengths have been calculated.')
+        input_flow_ln.save(workspace + r"/script_flow_ln_US")
+
+    # Flow length - reverse
+    flow_ln_reverse = FlowLength(in_flow_direction_raster=input_flow_dir,
+                                 direction_measurement='DOWNSTREAM')
+    arcpy.AddMessage('Downstream flow lengths have been calculated.')
+    flow_ln_reverse.save(workspace + r"/script_flow_ln_DS")
+
+    flow_ln_calc = flow_ln_reverse + input_flow_ln
+    arcpy.AddMessage("Sum of upstream and downstream flow lenghts have been calculated.")
+
+    max_ln = arcpy.GetRasterProperties_management(flow_ln_calc, "MAXIMUM")
+    max_ln = str(max_ln)
+    max_ln = max_ln.replace(',', '.')
+    max_ln = int(float(max_ln))
+    expression = "VALUE > " + str(max_ln)
+    arcpy.AddMessage("The farthest raster cell has been found.")
+
+    # Stream link equivalent
+    longest_path = Con(in_conditional_raster=flow_ln_calc, 
+                       in_true_raster_or_constant=1,
+                       in_false_raster_or_constant='',
+                       where_clause=expression)
+    arcpy.AddMessage('Conditional raster (max flow lenght) has been built.')
+
+   # Stream to feature
+    StreamToFeature(in_stream_raster=longest_path,
+                    in_flow_direction_raster=input_flow_dir,
+                    out_polyline_features=longest_flow_path_polyline,
+                    simplify="SIMPLIFY")
+    arcpy.AddMessage('Longest flow path has been converted been converted to a feature.')
+    return 1
+
+
+def jordarstkartan_to_raster(workspace, input_excel_data, jordartskartan):
+    # tool to be converted from Model builder to Python
+    pass
+
+
+def infrastructure_at_risk(workspace, depths, input_infrastructure, input_water_depth_raster):
+    '''
+    :param workspace: a geodatabase in which results will be stored
+    :param depths: water depth levels (in centimetres) for which analyses will be carried out
+    :param input_infrastructure: objects such as buildings or roads (polygons and polylines only)
+    :param input_water_depth_raster: raster with modelling results showing water depths (in metres)
+
+    
+    To do:
+    - a small buffer around flooded areas + dissolve to make sure that 
+    we're not removig too much (hydraulic connection is important!). Example: Klaralvan
+    - Search distance should be an optional parameter
+    '''
+
+    # variables
+    search_dist = 1  # meters by default? Not sure
+    depth_r_cm = 'in_memory' + r'/depth_r_cm'
+    depth_r_threshold = 'in_memory' + r'/depth_r_threshold'
+    depth_v = 'in_memory' + r'/depth_v'
+    depth_layer = r'depth_layer'
+    infrastructure_layer = r'infrastructure_layer'
+    raster_name = input_water_depth_raster.split("\\")[-1]
+    # arcpy.AddMessage(raster_name)
+
+    # list's length
+    n = len(depths)
+    i = 0
+
+    # Meters to centimeters
+    calc = Raster(input_water_depth_raster) * 100
+    calc.save(depth_r_cm)
+    arcpy.AddMessage("Depths have been recalculated.")
+
+    # Determination of geoetry type (polygon or polyline)
+    desc = arcpy.Describe(input_infrastructure)
+
+    # Calculate statisctics
+    arcpy.management.CalculateStatistics(depth_r_cm)
+
+    # itereation through list of water depths
+    n += 1
+    arcpy.AddMessage(f'Step {1}/{n}')
+
+    for depth in depths:
+        depth = int(depth)
+        where_exp = 'VALUE >' + str(depth)
+
+        # remove cells below current threshold value
+        con_r = Con(depth_r_cm, 1, "", where_exp)
+        con_r.save(depth_r_threshold)
+        arcpy.AddMessage("Cells below current threshold value have been removed.")
+
+        # Raster to polygon
+        arcpy.RasterToPolygon_conversion(in_raster = depth_r_threshold, 
+                                         out_polygon_features = depth_v, 
+                                         simplify = "NO_SIMPLIFY", 
+                                         raster_field = "VALUE")
+        arcpy.AddMessage("Raster has been coverted to polygon.")
+        arcpy.CopyFeatures_management(depth_v, workspace + r'/depth_v')  # what???
+        
+        # Select flooded areas greater than 12 sqm
+        # hehe, I wish I could
+        # depth_layer = arcpy.SelectLayerByAttribute_management(depth_v, "NEW_SELECTION", "Shape_Area >=12")
+        depth_layer = arcpy.SelectLayerByAttribute_management(depth_v)  # must be changed
+        arcpy.AddMessage("Selection is ready.")
+
+        # Select flooded areas greater than 12 sqm
+        arcpy.MakeFeatureLayer_management(input_infrastructure, infrastructure_layer)
+        arcpy.AddMessage("Selection #2 (buildings) is ready.")
+
+        flooded_infrastructure_selection = arcpy.management.SelectLayerByLocation(infrastructure_layer, 
+                                                                                  "INTERSECT", 
+                                                                                  depth_layer, 
+                                                                                  search_dist)
+        arcpy.AddMessage("Flooded infrastructure for the current threshold have been found (if any)")
+        
+        # Save data
+        currently_flooded = raster_name + r'_' + str(desc.shapeType) + r'_' + str(depth).replace('.', '_') + 'cm'  # not so nice, but works
+        print(currently_flooded)
+        arcpy.CopyFeatures_management(flooded_infrastructure_selection, currently_flooded)
+
+        # Remove fields
+        remove_unnecessary_fields(currently_flooded)
+        arcpy.AddMessage('Done!')
+    
+    return 1

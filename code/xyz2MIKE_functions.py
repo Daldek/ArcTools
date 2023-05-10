@@ -1,69 +1,45 @@
 import os
 import re
-# import pandas
-# import arcpy
-# from arcpy.sa import *  # spatial analyst module
-# from arcpy.da import *  # data access module
-# arcpy.CheckOutExtension("Spatial")
 
-dBase_path = r"C:\Work\python\_programy\automatyzacja\feature2raster_from_point\pointZdBase.dbf"
-save_path = r"C:\Work\python\_programy\automatyzacja\feature2raster_from_point"
+dBase_path = r"C:\Users\PLPD00293\Documents\!Temp\fin_script_dBase.dbf"
+save_path = r"C:\Users\PLPD00293\Documents\!Temp"
 
 
-#----------------------change_dBase_to_TXT_format-------------------------------
-def change_to_TXT(dBase_path, save_path):
+def dbf_to_txt(dbf_path, txt_location):
+    # Czy nie lepiej byloby zrobic po prostu kopie pliku i po prostu zmienic rozszerzenie?
+    txt_path = txt_location + r"\dbf2xyz.txt"
+    new_txt_file = open(txt_path, "w")
+    dbf_file = open(dbf_path)
 
-    # links
-    save_path = save_path + r"/raster2xyz.txt"
-
-    new_txt_file = open(save_path, "w")
-    for line in open(dBase_path):
+    for line in dbf_file:
         new_txt_file.writelines("{}\n".format(line))
+
+    dbf_file.close()
     new_txt_file.close()
+    print("1")
+    return txt_path
 
 
-#-----------------------------table_organizer-----------------------------------
-def tab_to_new_line(save_path):
-#--------------------------replacing_part---------------------------------------
+def tab_to_new_line(txt_path):
+    input_txt = open(txt_path, "w+")
+    working_data = input_txt.read()
+    working_data.replace(" ", "n")
+    # working_data.replace("-", "\n-")
+    # working_data = working_data.replace(" ", "\n")
+    # working_data = working_data.replace("-", "\n-")
+    # working_data = working_data.replace("", "")
 
-    # links
-    save_path = save_path + r"/raster2xyz.txt"
-
-    input_xyz = open(save_path, "r+")
-    working_data = input_xyz.read()
-    working_data = working_data.replace(" ", "\n")
-
-#----------------------------saving_part----------------------------------------
-    save_data = open(save_path, "w+")
-    save_data.write(working_data)
-
-#----------------------------below_zero_to_new_line-----------------------------
-    input_xyz = open(save_path, "r+")
-    working_data = input_xyz.read()
-    working_data = working_data.replace("-", "\n-")
-
-#----------------------------saving_part----------------------------------------
-    save_data = open(save_path, "w+")
-    save_data.write(working_data)
-
-# ----------------------------last_char-----------------------------------------
-    input_xyz = open(save_path, "r+")
-    working_data = input_xyz.read()
-    working_data = working_data.replace("", "")
-
-# ----------------------------saving_part---------------------------------------
-    save_data = open(save_path, "w+")
-    save_data.write(working_data)
+    # input_txt.write(working_data)
+    # input_txt.close()
+    print(working_data)
+    return txt_path
 
 
-#--------------------------delete_empty_lines-----------------------------------
 def del_empty_lines(input_table_from_table_organizer):
-
-    # links
     output_file_with_no_empty_lines = input_table_from_table_organizer + \
-                                      r"/raster2xyz_no_empty_lines.txt"
+                                      r"\dbf2xyz_no_empty_lines.txt"
     input_table_from_table_organizer = input_table_from_table_organizer + \
-                                       r"/raster2xyz.txt"
+                                       r"\dbf2xyz.txt"
 
     with open(input_table_from_table_organizer) as infile,\
             open(output_file_with_no_empty_lines, "w") as outfile:
@@ -73,32 +49,18 @@ def del_empty_lines(input_table_from_table_organizer):
             outfile.write(line)
 
 
-#---------------------------delete_headlines------------------------------------
-def remove_headlines(del_empty_lines_output):
+def remove_headlines(output_folder):
+    output_file = output_folder + r"/raster2xyz_no_empty_lines.txt"
 
-    # links
-    del_empty_lines_output = del_empty_lines_output \
-                             + r"/raster2xyz_no_empty_lines.txt"
-
-    remove_headlines = open(del_empty_lines_output, "r")
-    remove_lines = remove_headlines.readlines()
-    remove_headlines.close()
-
-    del remove_lines[0:3]
-    # del remove_lines[-1]
-
-    removed_headlines = open(del_empty_lines_output, "w+")
-
-    for headline in remove_lines:
-        removed_headlines.write(headline)
-
-    removed_headlines.close()
+    f = open(output_file, "w+")
+    lines = f.readlines()
+    del lines[0:3]
+    for line in lines:
+        f.write(line)
+    f.close()
 
 
-#---------------------------delete_unnecessary_rows-----------------------------
 def table_creation(infilelocation):
-
-    # Links
     infilename = infilelocation + r"/raster2xyz_no_empty_lines.txt"
     outfilename = infilelocation + r"/raster2xyz.txt"
 
@@ -117,7 +79,6 @@ def table_creation(infilelocation):
                 outfile.write(line)
 
 
-#----------------------------------xyz2mike-------------------------------------
 def xyz2mike(infilelocation):
 #------------------------------list_preparation---------------------------------
 
@@ -200,22 +161,21 @@ def xyz2mike(infilelocation):
 
 
 def dBase2xyz(dBase_Table, workspace):
-
     # Input files
-    dBase_path = dBase_Table
-    save_path = workspace
+    dBase_p = dBase_Table
+    save_p = workspace
 
-    # functions in order to run
-    change_to_TXT(dBase_path, save_path)
-    tab_to_new_line(save_path)
-    del_empty_lines(save_path)
-    remove_headlines(save_path)
-    table_creation(save_path)
-    del_empty_lines(save_path)
-    xyz2mike(save_path)
+    dbf_to_txt(dBase_p, save_p)
+    tab_to_new_line(save_p)
+    del_empty_lines(save_p)
+    remove_headlines(save_p)
+    table_creation(save_p)
+    del_empty_lines(save_p)
+    xyz2mike(save_p)
     # arcpy.AddMessage('Success!')
 
 
-dBase2xyz(dBase_path, save_path)
-
-# change_to_TXT(dBase_path, save_path)
+# dBase2xyz(dBase_path, save_path)
+out1 = dbf_to_txt(dBase_path, save_path)
+tab_to_new_line(out1)
+# del_empty_lines(save_path)
