@@ -4,3 +4,6 @@
 **/.git/
 /temp/
 /data.gdb/*.lock
+code/tests.ipynb
+code/log
+code/.prj
